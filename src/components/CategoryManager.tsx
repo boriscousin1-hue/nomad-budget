@@ -1,8 +1,11 @@
 'use client'
 
 import { useState } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '@/lib/supabase'
+import { easeApple } from '@/lib/motion'
 import type { Category } from '@/lib/types'
+import Button from '@/components/Button'
 
 type Props = {
   tripId: string
@@ -73,53 +76,70 @@ export default function CategoryManager({ tripId, userId, baseCurrency, categori
   return (
     <div className="mb-6">
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-sm font-medium text-neutral-500">Catégories</h2>
-        <button onClick={toggleCreateForm} className="text-xs rounded-full bg-neutral-900 text-white px-3 py-1 font-medium hover:bg-neutral-800 transition">
+        <h2 className="text-[13px] font-medium text-muted uppercase tracking-wide">Catégories</h2>
+        <button
+          onClick={toggleCreateForm}
+          className="text-[13px] rounded-full bg-black/[0.05] hover:bg-black/[0.09] text-ink px-3.5 py-1.5 font-medium transition-colors"
+        >
           {showForm && editingId === null ? 'Annuler' : '+ Catégorie'}
         </button>
       </div>
 
-      {showForm && (
-        <form onSubmit={submit} className="mb-3 rounded-2xl border border-neutral-200 bg-white p-4 flex flex-col gap-2.5">
-          {editingId && <p className="text-xs text-neutral-500">Modification de la catégorie</p>}
-          <div className="grid grid-cols-[56px_1fr] gap-2.5">
-            <input
-              type="text" placeholder="🍜" maxLength={4}
-              value={icon} onChange={(e) => setIcon(e.target.value)}
-              className="rounded-xl border border-neutral-300 px-3 py-2 text-sm text-center outline-none focus:border-neutral-500"
-            />
-            <input
-              type="text" placeholder="Nom (ex: Nourriture)"
-              value={name} onChange={(e) => setName(e.target.value)} required
-              className="rounded-xl border border-neutral-300 px-4 py-2 text-sm outline-none focus:border-neutral-500"
-            />
-          </div>
-          <input
-            type="number" step="0.01" min="0" placeholder={`Budget catégorie (optionnel, en ${baseCurrency})`}
-            value={budget} onChange={(e) => setBudget(e.target.value)}
-            className="rounded-xl border border-neutral-300 px-4 py-2 text-sm outline-none focus:border-neutral-500"
-          />
-          {error && <p className="text-xs text-red-600">{error}</p>}
-          <div className="flex gap-2">
-            <button type="submit" disabled={saving} className="flex-1 rounded-xl bg-neutral-900 text-white py-2 font-medium text-sm hover:bg-neutral-800 transition disabled:opacity-50">
-              {saving ? 'Enregistrement...' : editingId ? 'Enregistrer' : 'Créer la catégorie'}
-            </button>
-            {editingId && (
-              <button type="button" onClick={cancelForm} className="rounded-xl border border-neutral-300 px-4 text-sm text-neutral-600 hover:bg-neutral-50">
-                Annuler
-              </button>
-            )}
-          </div>
-        </form>
-      )}
+      <AnimatePresence initial={false}>
+        {showForm && (
+          <motion.form
+            onSubmit={submit}
+            initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+            animate={{ opacity: 1, height: 'auto', marginBottom: 12 }}
+            exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+            transition={{ duration: 0.35, ease: easeApple }}
+            className="overflow-hidden"
+          >
+            <div className="card p-4 flex flex-col gap-2.5">
+              {editingId && <p className="text-[13px] text-muted">Modification de la catégorie</p>}
+              <div className="grid grid-cols-[56px_1fr] gap-2.5">
+                <input
+                  type="text" placeholder="🍜" maxLength={4}
+                  value={icon} onChange={(e) => setIcon(e.target.value)}
+                  className="field text-center px-2"
+                />
+                <input
+                  type="text" placeholder="Nom (ex : Nourriture)"
+                  value={name} onChange={(e) => setName(e.target.value)} required className="field"
+                />
+              </div>
+              <input
+                type="number" step="0.01" min="0" placeholder={`Budget catégorie (optionnel, en ${baseCurrency})`}
+                value={budget} onChange={(e) => setBudget(e.target.value)} className="field tnum"
+              />
+              {error && <p className="text-[13px] text-[var(--color-danger)]">{error}</p>}
+              <div className="flex gap-2">
+                <Button type="submit" full disabled={saving}>
+                  {saving ? 'Enregistrement…' : editingId ? 'Enregistrer' : 'Créer la catégorie'}
+                </Button>
+                {editingId && (
+                  <Button type="button" variant="secondary" onClick={cancelForm}>Annuler</Button>
+                )}
+              </div>
+            </div>
+          </motion.form>
+        )}
+      </AnimatePresence>
 
       {categories.length > 0 && (
         <ul className="flex flex-wrap gap-2">
           {categories.map((cat) => (
-            <li key={cat.id} className="flex items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-xs">
-              <button onClick={() => startEdit(cat)} className="hover:underline">{cat.icon ? `${cat.icon} ` : ''}{cat.name}</button>
-              <button onClick={() => remove(cat.id)} className="text-neutral-400 hover:text-red-600">✕</button>
-            </li>
+            <motion.li
+              key={cat.id}
+              layout
+              initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }}
+              className="flex items-center gap-2 rounded-full bg-surface border border-[var(--color-line)] pl-3.5 pr-2.5 py-1.5 text-[13px] shadow-[var(--shadow-card)]"
+            >
+              <button onClick={() => startEdit(cat)} className="hover:text-accent transition-colors">
+                {cat.icon ? `${cat.icon} ` : ''}{cat.name}
+              </button>
+              <button onClick={() => remove(cat.id)} className="text-faint hover:text-[var(--color-danger)] transition-colors leading-none">✕</button>
+            </motion.li>
           ))}
         </ul>
       )}

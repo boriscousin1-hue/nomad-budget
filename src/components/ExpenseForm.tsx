@@ -1,10 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { motion } from 'framer-motion'
 import { supabase } from '@/lib/supabase'
 import { CURRENCIES } from '@/lib/currencies'
 import { localToBaseRate, withBankFee, type RatesResponse } from '@/lib/exchangeRates'
 import type { Category, Expense } from '@/lib/types'
+import Button from '@/components/Button'
 
 type Props = {
   tripId: string
@@ -125,34 +127,30 @@ export default function ExpenseForm({
   }
 
   return (
-    <form id="expense-form" onSubmit={submit} className="mb-8 rounded-2xl border border-neutral-200 bg-white p-6 flex flex-col gap-3">
+    <form id="expense-form" onSubmit={submit} className="card p-6 mb-8 flex flex-col gap-3 scroll-mt-20">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-medium text-neutral-500">
+        <h2 className="text-[13px] font-medium text-muted uppercase tracking-wide">
           {editingExpense ? 'Modifier la dépense' : 'Nouvelle dépense'}
         </h2>
         {editingExpense && (
-          <button type="button" onClick={onCancelEdit} className="text-xs text-neutral-400 hover:text-neutral-700 underline">
+          <button type="button" onClick={onCancelEdit} className="text-[13px] text-faint hover:text-ink transition-colors">
             Annuler
           </button>
         )}
       </div>
 
       {ratesError ? (
-        <div className="text-xs text-red-600 flex items-center justify-between">
+        <div className="text-[13px] text-[var(--color-danger)] flex items-center justify-between rounded-xl bg-[var(--color-danger)]/[0.06] px-4 py-3">
           <span>{ratesError}</span>
-          <button type="button" onClick={onRetryRates} className="underline">Réessayer</button>
+          <button type="button" onClick={onRetryRates} className="underline shrink-0 ml-3">Réessayer</button>
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-3">
           <input
             type="number" step="0.01" min="0" placeholder="Montant"
-            value={amountLocal} onChange={(e) => setAmountLocal(e.target.value)} required
-            className="rounded-xl border border-neutral-300 px-4 py-2.5 text-sm outline-none focus:border-neutral-500"
+            value={amountLocal} onChange={(e) => setAmountLocal(e.target.value)} required className="field tnum"
           />
-          <select
-            value={currencyLocal} onChange={(e) => setCurrencyLocal(e.target.value)}
-            className="rounded-xl border border-neutral-300 px-4 py-2.5 text-sm outline-none focus:border-neutral-500 bg-white"
-          >
+          <select value={currencyLocal} onChange={(e) => setCurrencyLocal(e.target.value)} className="field">
             {CURRENCIES.map((c) => (
               <option key={c.code} value={c.code}>{c.code} — {c.name}</option>
             ))}
@@ -161,10 +159,7 @@ export default function ExpenseForm({
       )}
 
       {categories.length > 0 && (
-        <select
-          value={categoryId} onChange={(e) => setCategoryId(e.target.value)}
-          className="rounded-xl border border-neutral-300 px-4 py-2.5 text-sm outline-none focus:border-neutral-500 bg-white"
-        >
+        <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="field">
           <option value="">Sans catégorie</option>
           {categories.map((c) => (
             <option key={c.id} value={c.id}>{c.icon ? `${c.icon} ` : ''}{c.name}</option>
@@ -173,42 +168,39 @@ export default function ExpenseForm({
       )}
 
       <div className="grid grid-cols-2 gap-3">
-        <input
-          type="number" step="0.1" min="0" max="100" placeholder="Frais banque (%)"
-          value={bankFeePct} onChange={(e) => setBankFeePct(e.target.value)}
-          className="w-full rounded-xl border border-neutral-300 px-4 py-2.5 text-sm outline-none focus:border-neutral-500"
-        />
-        <input
-          type="date" value={spentAt} onChange={(e) => setSpentAt(e.target.value)}
-          className="rounded-xl border border-neutral-300 px-4 py-2.5 text-sm outline-none focus:border-neutral-500"
-        />
+        <div className="relative">
+          <input
+            type="number" step="0.1" min="0" max="100" placeholder="Frais banque"
+            value={bankFeePct} onChange={(e) => setBankFeePct(e.target.value)} className="field pr-8 tnum"
+          />
+          <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted text-sm">%</span>
+        </div>
+        <input type="date" value={spentAt} onChange={(e) => setSpentAt(e.target.value)} className="field" />
       </div>
 
       <input
         type="text" placeholder="Note (optionnel)"
-        value={note} onChange={(e) => setNote(e.target.value)}
-        className="rounded-xl border border-neutral-300 px-4 py-2.5 text-sm outline-none focus:border-neutral-500"
+        value={note} onChange={(e) => setNote(e.target.value)} className="field"
       />
 
-      {previewError && <p className="text-xs text-red-600">{previewError}</p>}
+      {previewError && <p className="text-[13px] text-[var(--color-danger)]">{previewError}</p>}
       {previewBase !== null && !previewError && (
-        <div className="rounded-xl bg-neutral-50 px-4 py-2.5 text-sm">
-          ≈ <strong>{previewBase.toFixed(2)} {baseCurrency}</strong>
+        <motion.div
+          initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }}
+          className="rounded-2xl bg-accent/[0.06] border border-accent/[0.12] px-4 py-3 text-[15px]"
+        >
+          ≈ <strong className="tnum">{previewBase.toFixed(2)} {baseCurrency}</strong>
           {feePctNum > 0 && (
-            <span className="text-neutral-500"> · coût réel {previewWithFee!.toFixed(2)} {baseCurrency} (frais inclus)</span>
+            <span className="text-muted"> · coût réel <span className="tnum">{previewWithFee!.toFixed(2)} {baseCurrency}</span> (frais inclus)</span>
           )}
-        </div>
+        </motion.div>
       )}
 
-      {error && <p className="text-xs text-red-600">{error}</p>}
+      {error && <p className="text-[13px] text-[var(--color-danger)]">{error}</p>}
 
-      <button
-        type="submit"
-        disabled={saving || !rates || amountLocalNum <= 0}
-        className="mt-1 rounded-xl bg-neutral-900 text-white py-2.5 font-medium text-sm hover:bg-neutral-800 transition disabled:opacity-50"
-      >
-        {saving ? 'Enregistrement...' : editingExpense ? 'Enregistrer les modifications' : 'Ajouter la dépense'}
-      </button>
+      <Button type="submit" size="lg" full disabled={saving || !rates || amountLocalNum <= 0} className="mt-1">
+        {saving ? 'Enregistrement…' : editingExpense ? 'Enregistrer les modifications' : 'Ajouter la dépense'}
+      </Button>
     </form>
   )
 }

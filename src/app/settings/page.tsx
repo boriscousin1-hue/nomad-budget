@@ -2,9 +2,12 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { motion } from 'framer-motion'
 import { supabase } from '@/lib/supabase'
 import { useUser } from '@/lib/useUser'
 import { CURRENCIES } from '@/lib/currencies'
+import { fadeUp, stagger } from '@/lib/motion'
+import Button from '@/components/Button'
 
 export default function SettingsPage() {
   const { user, loading: userLoading } = useUser()
@@ -47,49 +50,54 @@ export default function SettingsPage() {
   if (userLoading || loadingSettings) return null
 
   return (
-    <div className="min-h-screen bg-neutral-50 px-4 py-10">
-      <div className="max-w-2xl mx-auto">
-        <Link href="/" className="text-sm text-neutral-500 hover:text-neutral-800 underline mb-6 inline-block">
-          ← Retour
-        </Link>
+    <div className="min-h-screen">
+      <header className="glass sticky top-0 z-20 border-b border-[var(--color-line)]">
+        <div className="max-w-2xl mx-auto px-5 h-14 flex items-center gap-3">
+          <Link href="/" className="text-muted hover:text-ink transition-colors text-[15px] flex items-center gap-1">
+            <span className="text-lg leading-none">‹</span> Voyages
+          </Link>
+        </div>
+      </header>
 
-        <h1 className="text-xl font-semibold mb-1">Réglages</h1>
-        <p className="text-sm text-neutral-500 mb-8">Ces valeurs servent de défaut pour tes nouveaux voyages et dépenses.</p>
+      <main className="max-w-2xl mx-auto px-5 pt-10 pb-24">
+        <motion.div initial="hidden" animate="show" variants={stagger}>
+          <motion.div variants={fadeUp} className="mb-8">
+            <h1 className="text-[34px] leading-none font-semibold tracking-tight">Réglages</h1>
+            <p className="text-muted text-[15px] mt-2">Valeurs par défaut pour tes nouveaux voyages et dépenses.</p>
+          </motion.div>
 
-        <form onSubmit={save} className="rounded-2xl border border-neutral-200 bg-white p-6 flex flex-col gap-4">
-          <div>
-            <label className="text-sm font-medium block mb-1.5">Devise préférée</label>
-            <select
-              value={homeCurrency} onChange={(e) => setHomeCurrency(e.target.value)}
-              className="w-full rounded-xl border border-neutral-300 px-4 py-2.5 text-sm outline-none focus:border-neutral-500 bg-white"
-            >
-              {CURRENCIES.map((c) => (
-                <option key={c.code} value={c.code}>{c.code} — {c.name}</option>
-              ))}
-            </select>
-            <p className="text-xs text-neutral-400 mt-1">Utilisée par défaut comme devise de base d&apos;un nouveau voyage.</p>
-          </div>
+          <motion.form variants={fadeUp} onSubmit={save} className="card p-7 flex flex-col gap-6">
+            <div>
+              <label className="text-[15px] font-medium block mb-2">Devise préférée</label>
+              <select value={homeCurrency} onChange={(e) => setHomeCurrency(e.target.value)} className="field">
+                {CURRENCIES.map((c) => <option key={c.code} value={c.code}>{c.code} — {c.name}</option>)}
+              </select>
+              <p className="text-[13px] text-faint mt-2">Devise de base proposée par défaut pour un nouveau voyage.</p>
+            </div>
 
-          <div>
-            <label className="text-sm font-medium block mb-1.5">Frais bancaire/carte par défaut (%)</label>
-            <input
-              type="number" step="0.1" min="0" max="100"
-              value={defaultBankFeePct} onChange={(e) => setDefaultBankFeePct(e.target.value)}
-              className="w-full rounded-xl border border-neutral-300 px-4 py-2.5 text-sm outline-none focus:border-neutral-500"
-            />
-            <p className="text-xs text-neutral-400 mt-1">Pré-rempli à chaque nouvelle dépense (modifiable au cas par cas).</p>
-          </div>
+            <div className="h-px bg-[var(--color-line)]" />
 
-          {error && <p className="text-xs text-red-600">{error}</p>}
+            <div>
+              <label className="text-[15px] font-medium block mb-2">Frais bancaire / carte par défaut</label>
+              <div className="relative">
+                <input
+                  type="number" step="0.1" min="0" max="100"
+                  value={defaultBankFeePct} onChange={(e) => setDefaultBankFeePct(e.target.value)}
+                  className="field pr-9"
+                />
+                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-muted text-sm">%</span>
+              </div>
+              <p className="text-[13px] text-faint mt-2">Pré-rempli à chaque nouvelle dépense (modifiable au cas par cas).</p>
+            </div>
 
-          <button
-            type="submit" disabled={saving}
-            className="rounded-xl bg-neutral-900 text-white py-2.5 font-medium text-sm hover:bg-neutral-800 transition disabled:opacity-50"
-          >
-            {saving ? 'Enregistrement...' : saved ? '✓ Enregistré' : 'Enregistrer'}
-          </button>
-        </form>
-      </div>
+            {error && <p className="text-[var(--color-danger)] text-[13px]">{error}</p>}
+
+            <Button type="submit" size="lg" disabled={saving} className="self-start">
+              {saving ? 'Enregistrement…' : saved ? '✓ Enregistré' : 'Enregistrer'}
+            </Button>
+          </motion.form>
+        </motion.div>
+      </main>
     </div>
   )
 }

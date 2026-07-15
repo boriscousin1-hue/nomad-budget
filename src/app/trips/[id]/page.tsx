@@ -3,14 +3,17 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '@/lib/supabase'
 import { useUser } from '@/lib/useUser'
 import { fetchRates, type RatesResponse } from '@/lib/exchangeRates'
 import { downloadCsv } from '@/lib/csv'
+import { fadeUp, stagger, easeApple } from '@/lib/motion'
 import type { Trip, Category, Expense } from '@/lib/types'
 import ExpenseForm from '@/components/ExpenseForm'
 import CategoryManager from '@/components/CategoryManager'
 import SpendingChart from '@/components/SpendingChart'
+import AnimatedNumber from '@/components/AnimatedNumber'
 
 export default function TripDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -109,10 +112,11 @@ export default function TripDetailPage() {
 
   if (trip === null) {
     return (
-      <div className="min-h-screen bg-neutral-50 flex items-center justify-center px-4">
-        <div className="text-center">
-          <p className="text-neutral-500 mb-4">Voyage introuvable.</p>
-          <Link href="/" className="text-sm underline">Retour à l&apos;accueil</Link>
+      <div className="min-h-screen flex items-center justify-center px-4">
+        <div className="card p-10 text-center">
+          <div className="text-4xl mb-3">🧭</div>
+          <p className="text-muted mb-4">Voyage introuvable.</p>
+          <Link href="/" className="text-accent text-sm hover:underline">Retour à l&apos;accueil</Link>
         </div>
       </div>
     )
@@ -149,81 +153,103 @@ export default function TripDetailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-neutral-50 px-4 py-10">
-      <div className="max-w-2xl mx-auto">
-        <Link href="/" className="text-sm text-neutral-500 hover:text-neutral-800 underline mb-6 inline-block">
-          ← Tous les voyages
-        </Link>
+    <div className="min-h-screen">
+      {/* Barre supérieure frostée */}
+      <header className="glass sticky top-0 z-20 border-b border-[var(--color-line)]">
+        <div className="max-w-2xl mx-auto px-5 h-14 flex items-center justify-between gap-3">
+          <Link href="/" className="text-muted hover:text-ink transition-colors text-[15px] flex items-center gap-1 min-w-0">
+            <span className="text-lg leading-none">‹</span>
+            <span className="truncate">Voyages</span>
+          </Link>
+          <button onClick={deleteTrip} disabled={deleting} className="text-[13px] text-faint hover:text-[var(--color-danger)] transition-colors shrink-0">
+            {deleting ? 'Suppression…' : 'Supprimer'}
+          </button>
+        </div>
+      </header>
 
-        <div className="rounded-2xl border border-neutral-200 bg-white p-6 mb-6">
-          <div className="flex items-start justify-between">
-            <h1 className="text-xl font-semibold">{trip.name}</h1>
-            <button onClick={deleteTrip} disabled={deleting} className="text-xs text-red-600 hover:text-red-800 underline disabled:opacity-50">
-              {deleting ? 'Suppression...' : 'Supprimer'}
-            </button>
-          </div>
-          <p className="text-sm text-neutral-500 mt-2">Devise de base : <strong>{trip.base_currency}</strong></p>
+      <main className="max-w-2xl mx-auto px-5 pt-8 pb-24">
+        <motion.div initial="hidden" animate="show" variants={stagger}>
+          {/* En-tête voyage */}
+          <motion.div variants={fadeUp} className="mb-6">
+            <h1 className="text-[32px] leading-tight font-semibold tracking-tight">{trip.name}</h1>
+            <p className="text-muted text-[15px] mt-1">
+              {[
+                trip.start_date && new Date(trip.start_date).toLocaleDateString('fr-FR'),
+                trip.end_date && new Date(trip.end_date).toLocaleDateString('fr-FR'),
+              ].filter(Boolean).join(' → ') || `Devise ${trip.base_currency}`}
+            </p>
+          </motion.div>
 
-          {/* Résumé budget temps réel */}
-          <div className="mt-4 pt-4 border-t border-neutral-100">
-            <div className="flex items-baseline justify-between">
-              <span className="text-sm text-neutral-500">Dépensé (frais inclus)</span>
-              <span className="text-lg font-semibold">{totalSpent.toFixed(2)} {trip.base_currency}</span>
+          {/* Carte budget — le héros de la page */}
+          <motion.div variants={fadeUp} className="card p-7 mb-6 overflow-hidden">
+            <span className="text-[13px] font-medium text-muted uppercase tracking-wide">Dépensé (frais inclus)</span>
+            <div className="mt-1.5 flex items-baseline gap-2">
+              <span className="text-[40px] leading-none font-semibold tracking-tight tnum">
+                <AnimatedNumber value={totalSpent} />
+              </span>
+              <span className="text-xl text-muted font-medium">{trip.base_currency}</span>
             </div>
+
             {trip.total_budget != null && (
-              <>
-                <div className="mt-2 h-2 rounded-full bg-neutral-100 overflow-hidden">
-                  <div
-                    className={`h-full ${remaining! < 0 ? 'bg-red-500' : 'bg-neutral-900'}`}
-                    style={{ width: `${Math.min(100, (totalSpent / trip.total_budget) * 100)}%` }}
+              <div className="mt-5">
+                <div className="h-2.5 rounded-full bg-black/[0.06] overflow-hidden">
+                  <motion.div
+                    className={`h-full rounded-full ${remaining! < 0 ? 'bg-[var(--color-danger)]' : 'bg-accent'}`}
+                    initial={{ width: 0 }}
+                    animate={{ width: `${Math.min(100, (totalSpent / trip.total_budget) * 100)}%` }}
+                    transition={{ duration: 0.7, ease: easeApple }}
                   />
                 </div>
-                <p className={`text-xs mt-1 ${remaining! < 0 ? 'text-red-600' : 'text-neutral-400'}`}>
+                <p className={`text-[13px] mt-2 ${remaining! < 0 ? 'text-[var(--color-danger)]' : 'text-muted'}`}>
                   {remaining! >= 0
-                    ? `${remaining!.toFixed(2)} ${trip.base_currency} restants sur ${trip.total_budget} ${trip.base_currency}`
-                    : `Dépassement de ${Math.abs(remaining!).toFixed(2)} ${trip.base_currency}`}
+                    ? <><span className="tnum font-medium text-ink">{remaining!.toFixed(2)} {trip.base_currency}</span> restants sur {trip.total_budget} {trip.base_currency}</>
+                    : <>Dépassement de <span className="tnum font-medium">{Math.abs(remaining!).toFixed(2)} {trip.base_currency}</span></>}
                 </p>
-              </>
+              </div>
             )}
-            {totalFees > 0 && (
-              <p className="text-xs text-amber-600 mt-1">
-                dont {totalFees.toFixed(2)} {trip.base_currency} de frais bancaires cachés
-              </p>
-            )}
-          </div>
 
-          {/* Répartition par catégorie */}
-          {(categoryBreakdown.length > 0 || uncategorizedSpent > 0) && (
-            <div className="mt-4 pt-4 border-t border-neutral-100 flex flex-col gap-2.5">
-              <span className="text-xs font-medium text-neutral-500">Par catégorie</span>
-              {categoryBreakdown.map((cat) => (
-                <div key={cat.id}>
-                  <div className="flex items-center justify-between text-sm">
-                    <span>{cat.icon ? `${cat.icon} ` : ''}{cat.name}</span>
-                    <span className="text-neutral-500">
-                      {cat.spent.toFixed(2)} {trip.base_currency}
-                      {cat.budget_amount != null && ` / ${cat.budget_amount} ${trip.base_currency}`}
-                    </span>
-                  </div>
-                  {cat.budget_amount != null && (
-                    <div className="mt-1 h-1.5 rounded-full bg-neutral-100 overflow-hidden">
-                      <div
-                        className={`h-full ${cat.spent > cat.budget_amount ? 'bg-red-500' : 'bg-neutral-400'}`}
-                        style={{ width: `${Math.min(100, (cat.spent / cat.budget_amount) * 100)}%` }}
-                      />
+            {totalFees > 0 && (
+              <div className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-[var(--color-warn)]/[0.1] text-[var(--color-warn)] px-3 py-1.5 text-[13px]">
+                <span>👛</span>
+                <span className="tnum">{totalFees.toFixed(2)} {trip.base_currency}</span> de frais bancaires cachés
+              </div>
+            )}
+
+            {/* Répartition par catégorie */}
+            {(categoryBreakdown.length > 0 || uncategorizedSpent > 0) && (
+              <div className="mt-6 pt-6 border-t border-[var(--color-line)] flex flex-col gap-3.5">
+                <span className="text-[13px] font-medium text-muted uppercase tracking-wide">Par catégorie</span>
+                {categoryBreakdown.map((cat) => (
+                  <div key={cat.id}>
+                    <div className="flex items-center justify-between text-[15px]">
+                      <span>{cat.icon ? `${cat.icon} ` : ''}{cat.name}</span>
+                      <span className="text-muted tnum">
+                        {cat.spent.toFixed(2)} {trip.base_currency}
+                        {cat.budget_amount != null && <span className="text-faint"> / {cat.budget_amount}</span>}
+                      </span>
                     </div>
-                  )}
-                </div>
-              ))}
-              {uncategorizedSpent > 0 && (
-                <div className="flex items-center justify-between text-sm text-neutral-400">
-                  <span>Sans catégorie</span>
-                  <span>{uncategorizedSpent.toFixed(2)} {trip.base_currency}</span>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+                    {cat.budget_amount != null && (
+                      <div className="mt-1.5 h-1.5 rounded-full bg-black/[0.06] overflow-hidden">
+                        <motion.div
+                          className={`h-full rounded-full ${cat.spent > cat.budget_amount ? 'bg-[var(--color-danger)]' : 'bg-faint'}`}
+                          initial={{ width: 0 }}
+                          animate={{ width: `${Math.min(100, (cat.spent / cat.budget_amount) * 100)}%` }}
+                          transition={{ duration: 0.6, ease: easeApple }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {uncategorizedSpent > 0 && (
+                  <div className="flex items-center justify-between text-[15px] text-muted">
+                    <span>Sans catégorie</span>
+                    <span className="tnum">{uncategorizedSpent.toFixed(2)} {trip.base_currency}</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </motion.div>
+        </motion.div>
 
         <CategoryManager
           tripId={trip.id}
@@ -237,7 +263,7 @@ export default function TripDetailPage() {
             setExpenses((prev) => prev.map((e) => (e.category_id === catId ? { ...e, category_id: null } : e)))
           }}
         />
-        {loadingCategories && <p className="text-xs text-neutral-400 -mt-4 mb-6">Chargement des catégories...</p>}
+        {loadingCategories && <p className="text-[13px] text-faint -mt-4 mb-6">Chargement des catégories…</p>}
 
         <ExpenseForm
           tripId={trip.id}
@@ -256,24 +282,24 @@ export default function TripDetailPage() {
 
         {/* Filtre de dates + export CSV */}
         <div className="flex items-center gap-2 mb-3 flex-wrap">
-          <h2 className="text-sm font-medium text-neutral-500 flex-1">Dépenses</h2>
+          <h2 className="text-[13px] font-medium text-muted uppercase tracking-wide flex-1">Dépenses</h2>
           <input
             type="date" value={filterFrom} onChange={(e) => setFilterFrom(e.target.value)}
-            className="text-xs rounded-lg border border-neutral-300 px-2 py-1 outline-none focus:border-neutral-500"
+            className="text-[13px] rounded-lg border border-[var(--color-line)] bg-surface px-2.5 py-1.5 outline-none focus:border-accent"
           />
-          <span className="text-xs text-neutral-400">→</span>
+          <span className="text-xs text-faint">→</span>
           <input
             type="date" value={filterTo} onChange={(e) => setFilterTo(e.target.value)}
-            className="text-xs rounded-lg border border-neutral-300 px-2 py-1 outline-none focus:border-neutral-500"
+            className="text-[13px] rounded-lg border border-[var(--color-line)] bg-surface px-2.5 py-1.5 outline-none focus:border-accent"
           />
           {(filterFrom || filterTo) && (
-            <button onClick={() => { setFilterFrom(''); setFilterTo('') }} className="text-xs text-neutral-400 hover:text-neutral-700 underline">
+            <button onClick={() => { setFilterFrom(''); setFilterTo('') }} className="text-xs text-faint hover:text-ink transition-colors">
               ✕
             </button>
           )}
           <button
             onClick={exportCsv} disabled={filteredExpenses.length === 0}
-            className="text-xs rounded-full border border-neutral-300 px-3 py-1 hover:bg-neutral-50 disabled:opacity-40"
+            className="text-[13px] rounded-full bg-black/[0.05] hover:bg-black/[0.09] transition-colors px-3.5 py-1.5 disabled:opacity-40"
           >
             📥 CSV
           </button>
@@ -283,42 +309,51 @@ export default function TripDetailPage() {
 
         {/* Liste des dépenses */}
         {loadingExpenses ? (
-          <p className="text-sm text-neutral-400">Chargement...</p>
+          <div className="flex flex-col gap-2">
+            {[0, 1, 2].map((i) => <div key={i} className="card h-16 animate-pulse opacity-60" />)}
+          </div>
         ) : filteredExpenses.length === 0 ? (
-          <p className="text-sm text-neutral-400">
-            {expenses.length === 0 ? 'Aucune dépense pour l’instant.' : 'Aucune dépense sur cette période.'}
-          </p>
+          <div className="card p-10 text-center">
+            <p className="text-muted text-sm">
+              {expenses.length === 0 ? 'Aucune dépense pour l’instant.' : 'Aucune dépense sur cette période.'}
+            </p>
+          </div>
         ) : (
-          <ul className="flex flex-col gap-2">
-            {filteredExpenses.map((exp) => {
-              const cat = exp.category_id ? categoriesById[exp.category_id] : null
-              return (
-                <li
-                  key={exp.id}
-                  className={`rounded-xl border bg-white px-4 py-3 flex items-center justify-between ${editingExpense?.id === exp.id ? 'border-neutral-900' : 'border-neutral-200'}`}
-                >
-                  <div>
-                    <div className="text-sm font-medium">
-                      {exp.amount_local} {exp.currency_local}
-                      <span className="text-neutral-400 font-normal"> → {exp.amount_base_with_fee.toFixed(2)} {trip.base_currency}</span>
+          <motion.ul layout className="flex flex-col gap-2">
+            <AnimatePresence initial={false}>
+              {filteredExpenses.map((exp) => {
+                const cat = exp.category_id ? categoriesById[exp.category_id] : null
+                return (
+                  <motion.li
+                    key={exp.id}
+                    layout
+                    initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96 }}
+                    transition={{ duration: 0.3, ease: easeApple }}
+                    className={`group rounded-2xl bg-surface border px-4 py-3.5 flex items-center justify-between shadow-[var(--shadow-card)] transition-colors ${editingExpense?.id === exp.id ? 'border-accent' : 'border-[var(--color-line)]'}`}
+                  >
+                    <div className="min-w-0">
+                      <div className="text-[15px] font-medium tnum">
+                        {exp.amount_local} {exp.currency_local}
+                        <span className="text-faint font-normal"> → {exp.amount_base_with_fee.toFixed(2)} {trip.base_currency}</span>
+                      </div>
+                      <div className="text-[13px] text-faint truncate">
+                        {new Date(exp.spent_at).toLocaleDateString('fr-FR')}
+                        {cat && ` · ${cat.icon ? `${cat.icon} ` : ''}${cat.name}`}
+                        {exp.note && ` · ${exp.note}`}
+                        {exp.bank_fee_pct > 0 && ` · frais ${exp.bank_fee_pct}%`}
+                      </div>
                     </div>
-                    <div className="text-xs text-neutral-400">
-                      {new Date(exp.spent_at).toLocaleDateString('fr-FR')}
-                      {cat && ` · ${cat.icon ? `${cat.icon} ` : ''}${cat.name}`}
-                      {exp.note && ` · ${exp.note}`}
-                      {exp.bank_fee_pct > 0 && ` · frais ${exp.bank_fee_pct}%`}
+                    <div className="flex items-center gap-1 shrink-0 ml-2">
+                      <button onClick={() => startEditExpense(exp)} className="text-faint hover:text-ink transition-colors h-8 w-8 rounded-full hover:bg-black/[0.05] flex items-center justify-center text-sm">✏️</button>
+                      <button onClick={() => deleteExpense(exp.id)} className="text-faint hover:text-[var(--color-danger)] transition-colors h-8 w-8 rounded-full hover:bg-black/[0.05] flex items-center justify-center">✕</button>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <button onClick={() => startEditExpense(exp)} className="text-xs text-neutral-400 hover:text-neutral-800">✏️</button>
-                    <button onClick={() => deleteExpense(exp.id)} className="text-xs text-neutral-400 hover:text-red-600">✕</button>
-                  </div>
-                </li>
-              )
-            })}
-          </ul>
+                  </motion.li>
+                )
+              })}
+            </AnimatePresence>
+          </motion.ul>
         )}
-      </div>
+      </main>
     </div>
   )
 }

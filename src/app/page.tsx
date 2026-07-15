@@ -3,9 +3,12 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '@/lib/supabase'
 import { useUser } from '@/lib/useUser'
 import { CURRENCIES } from '@/lib/currencies'
+import { fadeUp, stagger, easeApple } from '@/lib/motion'
+import Button from '@/components/Button'
 
 type Trip = {
   id: string
@@ -15,6 +18,13 @@ type Trip = {
   start_date: string | null
   end_date: string | null
   created_at: string
+}
+
+// Dégradé doux et déterministe par voyage (à partir du nom) pour la vignette.
+function gradientFor(seed: string) {
+  let h = 0
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) % 360
+  return `linear-gradient(135deg, hsl(${h} 70% 62%), hsl(${(h + 40) % 360} 72% 54%))`
 }
 
 export default function Home() {
@@ -42,7 +52,6 @@ export default function Home() {
         setTrips((data as Trip[]) || [])
         setLoadingTrips(false)
       })
-    // Devise préférée des réglages -> défaut du formulaire nouveau voyage.
     supabase.from('user_settings').select('home_currency').eq('user_id', user.id).maybeSingle()
       .then(({ data }) => { if (data?.home_currency) setBaseCurrency(data.home_currency) })
   }, [user])
@@ -82,117 +91,134 @@ export default function Home() {
   if (loading) return null
 
   return (
-    <div className="min-h-screen bg-neutral-50 px-4 py-10">
-      <div className="max-w-2xl mx-auto">
-        <header className="flex items-center justify-between mb-10">
-          <h1 className="text-xl font-semibold">Nomad Budget</h1>
-          <div className="flex items-center gap-4">
-            <Link href="/settings" className="text-sm text-neutral-500 hover:text-neutral-800 underline">
+    <div className="min-h-screen">
+      {/* Barre supérieure frostée, collante */}
+      <header className="glass sticky top-0 z-20 border-b border-[var(--color-line)]">
+        <div className="max-w-2xl mx-auto px-5 h-14 flex items-center justify-between">
+          <span className="font-semibold tracking-tight flex items-center gap-2">
+            <span className="text-lg">🧭</span> Nomad Budget
+          </span>
+          <div className="flex items-center gap-1">
+            <Link href="/settings" className="text-[13px] text-muted hover:text-ink transition-colors px-3 py-1.5 rounded-full hover:bg-black/[0.04]">
               Réglages
             </Link>
-            <button onClick={signOut} className="text-sm text-neutral-500 hover:text-neutral-800 underline">
-              Se déconnecter
+            <button onClick={signOut} className="text-[13px] text-muted hover:text-ink transition-colors px-3 py-1.5 rounded-full hover:bg-black/[0.04]">
+              Déconnexion
             </button>
           </div>
-        </header>
-
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-medium text-neutral-500">Tes voyages</h2>
-          <button
-            onClick={() => setShowForm((v) => !v)}
-            className="text-sm rounded-full bg-neutral-900 text-white px-4 py-1.5 font-medium hover:bg-neutral-800 transition"
-          >
-            {showForm ? 'Annuler' : '+ Nouveau voyage'}
-          </button>
         </div>
+      </header>
 
-        {showForm && (
-          <form onSubmit={createTrip} className="mb-8 rounded-2xl border border-neutral-200 bg-white p-6 flex flex-col gap-3">
-            <input
-              type="text"
-              placeholder="Nom du voyage (ex: Asie du Sud-Est 2026)"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-              className="rounded-xl border border-neutral-300 px-4 py-2.5 text-sm outline-none focus:border-neutral-500"
-            />
-            <div className="grid grid-cols-2 gap-3">
-              <select
-                value={baseCurrency}
-                onChange={(e) => setBaseCurrency(e.target.value)}
-                className="rounded-xl border border-neutral-300 px-4 py-2.5 text-sm outline-none focus:border-neutral-500 bg-white"
-              >
-                {CURRENCIES.map((c) => (
-                  <option key={c.code} value={c.code}>{c.code} — {c.name}</option>
-                ))}
-              </select>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                placeholder="Budget total (optionnel)"
-                value={totalBudget}
-                onChange={(e) => setTotalBudget(e.target.value)}
-                className="rounded-xl border border-neutral-300 px-4 py-2.5 text-sm outline-none focus:border-neutral-500"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="rounded-xl border border-neutral-300 px-4 py-2.5 text-sm outline-none focus:border-neutral-500"
-              />
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="rounded-xl border border-neutral-300 px-4 py-2.5 text-sm outline-none focus:border-neutral-500"
-              />
-            </div>
+      <main className="max-w-2xl mx-auto px-5 pt-10 pb-24">
+        {/* Titre + CTA */}
+        <motion.div
+          initial="hidden" animate="show" variants={stagger}
+          className="flex items-end justify-between mb-8"
+        >
+          <motion.div variants={fadeUp}>
+            <h1 className="text-[34px] leading-none font-semibold tracking-tight">Voyages</h1>
+            <p className="text-muted text-[15px] mt-2">
+              {trips.length > 0 ? `${trips.length} voyage${trips.length > 1 ? 's' : ''}` : 'Commence ton premier voyage'}
+            </p>
+          </motion.div>
+          <motion.div variants={fadeUp}>
+            <Button onClick={() => setShowForm((v) => !v)} variant={showForm ? 'secondary' : 'primary'}>
+              {showForm ? 'Annuler' : '+ Nouveau'}
+            </Button>
+          </motion.div>
+        </motion.div>
 
-            {error && <p className="text-red-600 text-xs">{error}</p>}
-
-            <button
-              type="submit"
-              disabled={saving}
-              className="mt-1 rounded-xl bg-neutral-900 text-white py-2.5 font-medium text-sm hover:bg-neutral-800 transition disabled:opacity-50"
+        {/* Formulaire création */}
+        <AnimatePresence initial={false}>
+          {showForm && (
+            <motion.form
+              onSubmit={createTrip}
+              initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+              animate={{ opacity: 1, height: 'auto', marginBottom: 24 }}
+              exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+              transition={{ duration: 0.4, ease: easeApple }}
+              className="overflow-hidden"
             >
-              {saving ? 'Création...' : 'Créer le voyage'}
-            </button>
-          </form>
-        )}
+              <div className="card p-6 flex flex-col gap-3">
+                <input
+                  type="text" placeholder="Nom du voyage (ex : Asie du Sud-Est 2026)"
+                  value={name} onChange={(e) => setName(e.target.value)} required className="field"
+                />
+                <div className="grid grid-cols-2 gap-3">
+                  <select value={baseCurrency} onChange={(e) => setBaseCurrency(e.target.value)} className="field">
+                    {CURRENCIES.map((c) => <option key={c.code} value={c.code}>{c.code} — {c.name}</option>)}
+                  </select>
+                  <input
+                    type="number" step="0.01" min="0" placeholder="Budget total (optionnel)"
+                    value={totalBudget} onChange={(e) => setTotalBudget(e.target.value)} className="field"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="field" />
+                  <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="field" />
+                </div>
+                {error && <p className="text-[var(--color-danger)] text-[13px]">{error}</p>}
+                <Button type="submit" size="lg" full disabled={saving} className="mt-1">
+                  {saving ? 'Création…' : 'Créer le voyage'}
+                </Button>
+              </div>
+            </motion.form>
+          )}
+        </AnimatePresence>
 
+        {/* Liste des voyages */}
         {loadingTrips ? (
-          <p className="text-sm text-neutral-400">Chargement...</p>
-        ) : trips.length === 0 ? (
-          <p className="text-sm text-neutral-400">Aucun voyage pour l&apos;instant. Crée le premier !</p>
-        ) : (
-          <ul className="flex flex-col gap-3">
-            {trips.map((trip) => (
-              <li key={trip.id}>
-                <Link
-                  href={`/trips/${trip.id}`}
-                  className="block rounded-2xl border border-neutral-200 bg-white p-5 hover:border-neutral-400 transition"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium">{trip.name}</span>
-                    <span className="text-xs text-neutral-400">{trip.base_currency}</span>
-                  </div>
-                  {(trip.start_date || trip.total_budget) && (
-                    <p className="text-xs text-neutral-500 mt-1">
-                      {trip.start_date && new Date(trip.start_date).toLocaleDateString('fr-FR')}
-                      {trip.start_date && trip.end_date && ' → '}
-                      {trip.end_date && new Date(trip.end_date).toLocaleDateString('fr-FR')}
-                      {trip.total_budget && ` · Budget ${trip.total_budget} ${trip.base_currency}`}
-                    </p>
-                  )}
-                </Link>
-              </li>
+          <div className="flex flex-col gap-3">
+            {[0, 1].map((i) => (
+              <div key={i} className="card p-5 h-[92px] animate-pulse opacity-60" />
             ))}
-          </ul>
+          </div>
+        ) : trips.length === 0 ? (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, ease: easeApple }}
+            className="card p-12 text-center"
+          >
+            <div className="text-5xl mb-4">🗺️</div>
+            <p className="text-ink font-medium">Aucun voyage pour l&apos;instant</p>
+            <p className="text-muted text-sm mt-1">Crée ton premier voyage pour commencer à suivre tes dépenses.</p>
+          </motion.div>
+        ) : (
+          <motion.ul
+            initial="hidden" animate="show" variants={stagger}
+            className="flex flex-col gap-3"
+          >
+            {trips.map((trip) => (
+              <motion.li key={trip.id} variants={fadeUp}>
+                <motion.div whileHover={{ y: -3 }} transition={{ duration: 0.25, ease: easeApple }}>
+                  <Link
+                    href={`/trips/${trip.id}`}
+                    className="card group flex items-center gap-4 p-4 hover:shadow-[var(--shadow-lift)] transition-shadow"
+                  >
+                    <div
+                      className="h-12 w-12 rounded-2xl shrink-0 flex items-center justify-center text-white text-lg shadow-[var(--shadow-pop)]"
+                      style={{ background: gradientFor(trip.name) }}
+                    >
+                      {trip.name.trim().charAt(0).toUpperCase() || '✈️'}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium truncate">{trip.name}</div>
+                      <p className="text-[13px] text-muted mt-0.5 truncate">
+                        {trip.start_date && new Date(trip.start_date).toLocaleDateString('fr-FR')}
+                        {trip.start_date && trip.end_date && ' → '}
+                        {trip.end_date && new Date(trip.end_date).toLocaleDateString('fr-FR')}
+                        {trip.total_budget != null && `${trip.start_date ? ' · ' : ''}Budget ${trip.total_budget} ${trip.base_currency}`}
+                        {!trip.start_date && trip.total_budget == null && trip.base_currency}
+                      </p>
+                    </div>
+                    <span className="text-faint group-hover:text-muted transition-colors text-lg shrink-0">›</span>
+                  </Link>
+                </motion.div>
+              </motion.li>
+            ))}
+          </motion.ul>
         )}
-      </div>
+      </main>
     </div>
   )
 }

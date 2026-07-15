@@ -1,26 +1,93 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* ── Design system « Nomad » (inspiration Apple) ──────────────────────────────
+   Police système = SF Pro sur Apple, propre partout ailleurs.
+   Palette sobre : gris Apple #f5f5f7, encre #1d1d1f, un seul accent bleu système. */
+@theme {
+  --color-canvas: #f5f5f7;
+  --color-surface: #ffffff;
+  --color-ink: #1d1d1f;
+  --color-muted: #6e6e73;
+  --color-faint: #86868b;
+  --color-accent: #0071e3;
+  --color-accent-hover: #0077ed;
+  --color-line: rgba(0, 0, 0, 0.08);
+  --color-danger: #e02d3c;
+  --color-warn: #b25e00;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+    "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04), 0 10px 30px -12px rgba(0, 0, 0, 0.12);
+  --shadow-lift: 0 2px 6px rgba(0, 0, 0, 0.06), 0 24px 48px -20px rgba(0, 0, 0, 0.22);
+  --shadow-pop: 0 8px 40px -8px rgba(0, 0, 0, 0.18);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  letter-spacing: -0.011em;
 }
+
+/* Ambiance : halo lumineux très discret en haut de page, façon key-light Apple. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(60rem 40rem at 50% -10%, rgba(0, 113, 227, 0.06), transparent 70%),
+    radial-gradient(50rem 30rem at 100% 0%, rgba(120, 90, 255, 0.05), transparent 70%);
+  pointer-events: none;
+}
+
+/* Chiffres monétaires alignés (largeur constante). */
+.tnum { font-variant-numeric: tabular-nums; }
+
+/* Champs de formulaire — style unifié « Apple » : fond translucide, focus bleu doux. */
+.field {
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid var(--color-line);
+  background: rgba(255, 255, 255, 0.7);
+  padding: 0.7rem 0.9rem;
+  font-size: 0.95rem;
+  color: var(--color-ink);
+  outline: none;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+.field::placeholder { color: var(--color-faint); }
+.field:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.12);
+  background: #fff;
+}
+select.field { appearance: none; cursor: pointer; }
+
+/* Carte de base. */
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: 24px;
+  box-shadow: var(--shadow-card);
+}
+
+/* Barre supérieure translucide (frosted glass). */
+.glass {
+  background: rgba(245, 245, 247, 0.72);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+}
+
+/* Réglages fins de la scrollbar (WebKit) pour un rendu plus discret. */
+::-webkit-scrollbar { height: 8px; width: 8px; }
+::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.16); border-radius: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
