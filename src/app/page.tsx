@@ -42,6 +42,9 @@ export default function Home() {
         setTrips((data as Trip[]) || [])
         setLoadingTrips(false)
       })
+    // Devise préférée des réglages -> défaut du formulaire nouveau voyage.
+    supabase.from('user_settings').select('home_currency').eq('user_id', user.id).maybeSingle()
+      .then(({ data }) => { if (data?.home_currency) setBaseCurrency(data.home_currency) })
   }, [user])
 
   const signOut = async () => {
@@ -83,9 +86,14 @@ export default function Home() {
       <div className="max-w-2xl mx-auto">
         <header className="flex items-center justify-between mb-10">
           <h1 className="text-xl font-semibold">Nomad Budget</h1>
-          <button onClick={signOut} className="text-sm text-neutral-500 hover:text-neutral-800 underline">
-            Se déconnecter
-          </button>
+          <div className="flex items-center gap-4">
+            <Link href="/settings" className="text-sm text-neutral-500 hover:text-neutral-800 underline">
+              Réglages
+            </Link>
+            <button onClick={signOut} className="text-sm text-neutral-500 hover:text-neutral-800 underline">
+              Se déconnecter
+            </button>
+          </div>
         </header>
 
         <div className="flex items-center justify-between mb-4">

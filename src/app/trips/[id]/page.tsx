@@ -5,39 +5,12 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { useUser } from '@/lib/useUser'
-import { CURRENCIES } from '@/lib/currencies'
-import { fetchRates, localToBaseRate, withBankFee, type RatesResponse } from '@/lib/exchangeRates'
-
-type Trip = {
-  id: string
-  name: string
-  base_currency: string
-  total_budget: number | null
-  start_date: string | null
-  end_date: string | null
-}
-
-type Category = {
-  id: string
-  name: string
-  icon: string | null
-  budget_amount: number | null
-}
-
-type Expense = {
-  id: string
-  category_id: string | null
-  amount_local: number
-  currency_local: string
-  exchange_rate: number
-  bank_fee_pct: number
-  amount_base: number
-  amount_base_with_fee: number
-  note: string | null
-  spent_at: string
-}
-
-const todayISO = () => new Date().toISOString().slice(0, 10)
+import { fetchRates, type RatesResponse } from '@/lib/exchangeRates'
+import { downloadCsv } from '@/lib/csv'
+import type { Trip, Category, Expense } from '@/lib/types'
+import ExpenseForm from '@/components/ExpenseForm'
+import CategoryManager from '@/components/CategoryManager'
+import SpendingChart from '@/components/SpendingChart'
 
 export default function TripDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -48,27 +21,19 @@ export default function TripDetailPage() {
 
   const [categories, setCategories] = useState<Category[]>([])
   const [loadingCategories, setLoadingCategories] = useState(true)
-  const [showCatForm, setShowCatForm] = useState(false)
-  const [catName, setCatName] = useState('')
-  const [catIcon, setCatIcon] = useState('')
-  const [catBudget, setCatBudget] = useState('')
-  const [savingCategory, setSavingCategory] = useState(false)
-  const [catError, setCatError] = useState<string | null>(null)
 
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [loadingExpenses, setLoadingExpenses] = useState(true)
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null)
 
   const [rates, setRates] = useState<RatesResponse | null>(null)
   const [ratesError, setRatesError] = useState<string | null>(null)
 
-  const [amountLocal, setAmountLocal] = useState('')
-  const [currencyLocal, setCurrencyLocal] = useState('')
-  const [categoryId, setCategoryId] = useState('')
-  const [bankFeePct, setBankFeePct] = useState('0')
-  const [note, setNote] = useState('')
-  const [spentAt, setSpentAt] = useState(todayISO())
-  const [savingExpense, setSavingExpense] = useState(false)
-  const [expenseError, setExpenseError] = useState<string | null>(null)
+  const [defaultCurrency, setDefaultCurrency] = useState('')
+  const [defaultBankFeePct, setDefaultBankFeePct] = useState('')
+
+  const [filterFrom, setFilterFrom] = useState('')
+  const [filterTo, setFilterTo] = useState('')
 
   // Charge le voyage
   useEffect(() => {
@@ -77,9 +42,9 @@ export default function TripDetailPage() {
       .then(({ data }) => setTrip((data as Trip) || null))
   }, [user, id])
 
-  // Charge catégories + dépenses + taux une fois le voyage connu
+  // Charge catégories + dépenses + taux + réglages une fois le voyage connu
   useEffect(() => {
-    if (!trip) return
+    if (!trip || !user) return
     supabase.from('categories').select('*').eq('trip_id', trip.id).order('created_at')
       .then(({ data }) => {
         setCategories((data as Category[]) || [])
@@ -92,10 +57,12 @@ export default function TripDetailPage() {
         setExpenses(rows)
         setLoadingExpenses(false)
         // Devise par défaut du formulaire : la dernière utilisée, sinon la devise de base.
-        setCurrencyLocal((prev) => prev || rows[0]?.currency_local || trip.base_currency)
+        setDefaultCurrency(rows[0]?.currency_local || trip.base_currency)
       })
+    supabase.from('user_settings').select('default_bank_fee_pct').eq('user_id', user.id).maybeSingle()
+      .then(({ data }) => setDefaultBankFeePct(String(data?.default_bank_fee_pct ?? 0)))
     loadRates(trip.base_currency)
-  }, [trip])
+  }, [trip, user])
 
   const loadRates = async (base: string) => {
     setRatesError(null)
@@ -115,95 +82,21 @@ export default function TripDetailPage() {
     router.push('/')
   }
 
-  const addCategory = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!user || !trip) return
-    setCatError(null)
-    setSavingCategory(true)
-    const { data, error } = await supabase.from('categories').insert({
-      trip_id: trip.id,
-      user_id: user.id,
-      name: catName.trim(),
-      icon: catIcon.trim() || null,
-      budget_amount: catBudget ? Number(catBudget) : null,
-    }).select().single()
-    setSavingCategory(false)
-    if (error) { setCatError(error.message); return }
-    setCategories((prev) => [...prev, data as Category])
-    setCatName(''); setCatIcon(''); setCatBudget(''); setShowCatForm(false)
-  }
-
-  const deleteCategory = async (catId: string) => {
-    if (!confirm('Supprimer cette catégorie ? Les dépenses associées repasseront "sans catégorie".')) return
-    const { error } = await supabase.from('categories').delete().eq('id', catId)
-    if (error) { alert(error.message); return }
-    setCategories((prev) => prev.filter((c) => c.id !== catId))
-    // La BDD passe déjà category_id à null (on delete set null) — on reflète ça localement.
-    setExpenses((prev) => prev.map((e) => (e.category_id === catId ? { ...e, category_id: null } : e)))
-    if (categoryId === catId) setCategoryId('')
-  }
-
   const deleteExpense = async (expenseId: string) => {
     if (!confirm('Supprimer cette dépense ?')) return
     const { error } = await supabase.from('expenses').delete().eq('id', expenseId)
     if (error) { alert(error.message); return }
     setExpenses((prev) => prev.filter((e) => e.id !== expenseId))
+    if (editingExpense?.id === expenseId) setEditingExpense(null)
   }
 
-  // Aperçu temps réel (avant soumission) — recalculé à chaque frappe, aucun appel réseau
-  // supplémentaire : `rates` couvre déjà toutes les devises pour la base du voyage.
-  const amountLocalNum = parseFloat(amountLocal) || 0
-  const feePctNum = parseFloat(bankFeePct) || 0
-  let previewBase: number | null = null
-  let previewWithFee: number | null = null
-  let previewError: string | null = null
-  if (rates && currencyLocal && amountLocalNum > 0) {
-    try {
-      const rate = localToBaseRate(rates, currencyLocal)
-      previewBase = amountLocalNum * rate
-      previewWithFee = withBankFee(previewBase, feePctNum)
-    } catch (e) {
-      previewError = e instanceof Error ? e.message : 'Devise non supportée'
-    }
+  const handleExpenseSaved = (expense: Expense, isNew: boolean) => {
+    setExpenses((prev) => (isNew ? [expense, ...prev] : prev.map((e) => (e.id === expense.id ? expense : e))))
   }
 
-  const addExpense = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!user || !trip || !rates) return
-    setExpenseError(null)
-
-    let rate: number
-    try {
-      rate = localToBaseRate(rates, currencyLocal)
-    } catch (err) {
-      setExpenseError(err instanceof Error ? err.message : 'Devise non supportée')
-      return
-    }
-    const amountBase = amountLocalNum * rate
-    const amountBaseWithFee = withBankFee(amountBase, feePctNum)
-
-    setSavingExpense(true)
-    const { data, error } = await supabase.from('expenses').insert({
-      trip_id: trip.id,
-      user_id: user.id,
-      category_id: categoryId || null,
-      amount_local: amountLocalNum,
-      currency_local: currencyLocal,
-      exchange_rate: rate,
-      bank_fee_pct: feePctNum,
-      amount_base: amountBase,
-      amount_base_with_fee: amountBaseWithFee,
-      note: note.trim() || null,
-      spent_at: spentAt,
-    }).select().single()
-
-    setSavingExpense(false)
-    if (error) { setExpenseError(error.message); return }
-
-    setExpenses((prev) => [data as Expense, ...prev])
-    // Reset : montant et note repartent à vide, devise/catégorie/frais/date restent (saisies répétées).
-    setAmountLocal('')
-    setNote('')
+  const startEditExpense = (exp: Expense) => {
+    setEditingExpense(exp)
+    document.getElementById('expense-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
   const categoriesById = useMemo(
@@ -212,6 +105,7 @@ export default function TripDetailPage() {
   )
 
   if (userLoading || trip === undefined) return null
+  if (!user) return null // useUser() redirige déjà vers /login ; assertion pour TS ci-dessous
 
   if (trip === null) {
     return (
@@ -224,12 +118,13 @@ export default function TripDetailPage() {
     )
   }
 
+  // Le résumé budget (total, reste, répartition par catégorie) porte TOUJOURS sur
+  // l'intégralité des dépenses, indépendamment du filtre de dates ci-dessous (c'est le
+  // vrai suivi de budget). Le filtre ne restreint que la liste, le graphique et l'export.
   const totalSpent = expenses.reduce((sum, e) => sum + e.amount_base_with_fee, 0)
   const totalFees = expenses.reduce((sum, e) => sum + (e.amount_base_with_fee - e.amount_base), 0)
   const remaining = trip.total_budget != null ? trip.total_budget - totalSpent : null
 
-  // Répartition par catégorie : une entrée par catégorie ayant une dépense ou un budget défini,
-  // + un seau "Sans catégorie" si des dépenses n'ont pas de catégorie.
   const categoryBreakdown = categories
     .map((cat) => ({
       ...cat,
@@ -237,6 +132,21 @@ export default function TripDetailPage() {
     }))
     .filter((c) => c.spent > 0 || c.budget_amount != null)
   const uncategorizedSpent = expenses.filter((e) => !e.category_id).reduce((s, e) => s + e.amount_base_with_fee, 0)
+
+  const filteredExpenses = expenses.filter(
+    (e) => (!filterFrom || e.spent_at >= filterFrom) && (!filterTo || e.spent_at <= filterTo)
+  )
+
+  const exportCsv = () => {
+    const headers = ['Date', 'Catégorie', 'Montant local', 'Devise', 'Taux', 'Frais %', `Montant (${trip.base_currency})`, `Coût réel (${trip.base_currency})`, 'Note']
+    const rows = filteredExpenses.map((e) => [
+      e.spent_at,
+      e.category_id ? categoriesById[e.category_id]?.name || '' : '',
+      e.amount_local, e.currency_local, e.exchange_rate.toFixed(6), e.bank_fee_pct,
+      e.amount_base.toFixed(2), e.amount_base_with_fee.toFixed(2), e.note || '',
+    ])
+    downloadCsv(headers, rows, `depenses-${trip.name.replace(/[^a-z0-9]+/gi, '-')}.csv`)
+  }
 
   return (
     <div className="min-h-screen bg-neutral-50 px-4 py-10">
@@ -315,150 +225,78 @@ export default function TripDetailPage() {
           )}
         </div>
 
-        {/* Gestion des catégories */}
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-medium text-neutral-500">Catégories</h2>
-            <button
-              onClick={() => setShowCatForm((v) => !v)}
-              className="text-xs rounded-full bg-neutral-900 text-white px-3 py-1 font-medium hover:bg-neutral-800 transition"
-            >
-              {showCatForm ? 'Annuler' : '+ Catégorie'}
+        <CategoryManager
+          tripId={trip.id}
+          userId={user.id}
+          baseCurrency={trip.base_currency}
+          categories={categories}
+          onCreated={(c) => setCategories((prev) => [...prev, c])}
+          onUpdated={(c) => setCategories((prev) => prev.map((x) => (x.id === c.id ? c : x)))}
+          onDeleted={(catId) => {
+            setCategories((prev) => prev.filter((c) => c.id !== catId))
+            setExpenses((prev) => prev.map((e) => (e.category_id === catId ? { ...e, category_id: null } : e)))
+          }}
+        />
+        {loadingCategories && <p className="text-xs text-neutral-400 -mt-4 mb-6">Chargement des catégories...</p>}
+
+        <ExpenseForm
+          tripId={trip.id}
+          userId={user.id}
+          baseCurrency={trip.base_currency}
+          categories={categories}
+          rates={rates}
+          ratesError={ratesError}
+          onRetryRates={() => loadRates(trip.base_currency)}
+          defaultCurrency={defaultCurrency}
+          defaultBankFeePct={defaultBankFeePct}
+          editingExpense={editingExpense}
+          onSaved={handleExpenseSaved}
+          onCancelEdit={() => setEditingExpense(null)}
+        />
+
+        {/* Filtre de dates + export CSV */}
+        <div className="flex items-center gap-2 mb-3 flex-wrap">
+          <h2 className="text-sm font-medium text-neutral-500 flex-1">Dépenses</h2>
+          <input
+            type="date" value={filterFrom} onChange={(e) => setFilterFrom(e.target.value)}
+            className="text-xs rounded-lg border border-neutral-300 px-2 py-1 outline-none focus:border-neutral-500"
+          />
+          <span className="text-xs text-neutral-400">→</span>
+          <input
+            type="date" value={filterTo} onChange={(e) => setFilterTo(e.target.value)}
+            className="text-xs rounded-lg border border-neutral-300 px-2 py-1 outline-none focus:border-neutral-500"
+          />
+          {(filterFrom || filterTo) && (
+            <button onClick={() => { setFilterFrom(''); setFilterTo('') }} className="text-xs text-neutral-400 hover:text-neutral-700 underline">
+              ✕
             </button>
-          </div>
-
-          {showCatForm && (
-            <form onSubmit={addCategory} className="mb-3 rounded-2xl border border-neutral-200 bg-white p-4 flex flex-col gap-2.5">
-              <div className="grid grid-cols-[56px_1fr] gap-2.5">
-                <input
-                  type="text" placeholder="🍜" maxLength={4}
-                  value={catIcon} onChange={(e) => setCatIcon(e.target.value)}
-                  className="rounded-xl border border-neutral-300 px-3 py-2 text-sm text-center outline-none focus:border-neutral-500"
-                />
-                <input
-                  type="text" placeholder="Nom (ex: Nourriture)"
-                  value={catName} onChange={(e) => setCatName(e.target.value)} required
-                  className="rounded-xl border border-neutral-300 px-4 py-2 text-sm outline-none focus:border-neutral-500"
-                />
-              </div>
-              <input
-                type="number" step="0.01" min="0" placeholder={`Budget catégorie (optionnel, en ${trip.base_currency})`}
-                value={catBudget} onChange={(e) => setCatBudget(e.target.value)}
-                className="rounded-xl border border-neutral-300 px-4 py-2 text-sm outline-none focus:border-neutral-500"
-              />
-              {catError && <p className="text-xs text-red-600">{catError}</p>}
-              <button
-                type="submit" disabled={savingCategory}
-                className="rounded-xl bg-neutral-900 text-white py-2 font-medium text-sm hover:bg-neutral-800 transition disabled:opacity-50"
-              >
-                {savingCategory ? 'Création...' : 'Créer la catégorie'}
-              </button>
-            </form>
           )}
-
-          {!loadingCategories && categories.length > 0 && (
-            <ul className="flex flex-wrap gap-2">
-              {categories.map((cat) => (
-                <li key={cat.id} className="flex items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-xs">
-                  <span>{cat.icon ? `${cat.icon} ` : ''}{cat.name}</span>
-                  <button onClick={() => deleteCategory(cat.id)} className="text-neutral-400 hover:text-red-600">✕</button>
-                </li>
-              ))}
-            </ul>
-          )}
+          <button
+            onClick={exportCsv} disabled={filteredExpenses.length === 0}
+            className="text-xs rounded-full border border-neutral-300 px-3 py-1 hover:bg-neutral-50 disabled:opacity-40"
+          >
+            📥 CSV
+          </button>
         </div>
 
-        {/* Formulaire de saisie */}
-        <form onSubmit={addExpense} className="mb-8 rounded-2xl border border-neutral-200 bg-white p-6 flex flex-col gap-3">
-          <h2 className="text-sm font-medium text-neutral-500">Nouvelle dépense</h2>
-
-          {ratesError ? (
-            <div className="text-xs text-red-600 flex items-center justify-between">
-              <span>{ratesError}</span>
-              <button type="button" onClick={() => loadRates(trip.base_currency)} className="underline">Réessayer</button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-3">
-              <input
-                type="number" step="0.01" min="0" placeholder="Montant"
-                value={amountLocal} onChange={(e) => setAmountLocal(e.target.value)} required
-                className="rounded-xl border border-neutral-300 px-4 py-2.5 text-sm outline-none focus:border-neutral-500"
-              />
-              <select
-                value={currencyLocal} onChange={(e) => setCurrencyLocal(e.target.value)}
-                className="rounded-xl border border-neutral-300 px-4 py-2.5 text-sm outline-none focus:border-neutral-500 bg-white"
-              >
-                {CURRENCIES.map((c) => (
-                  <option key={c.code} value={c.code}>{c.code} — {c.name}</option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {categories.length > 0 && (
-            <select
-              value={categoryId} onChange={(e) => setCategoryId(e.target.value)}
-              className="rounded-xl border border-neutral-300 px-4 py-2.5 text-sm outline-none focus:border-neutral-500 bg-white"
-            >
-              <option value="">Sans catégorie</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>{c.icon ? `${c.icon} ` : ''}{c.name}</option>
-              ))}
-            </select>
-          )}
-
-          <div className="grid grid-cols-2 gap-3">
-            <input
-              type="number" step="0.1" min="0" max="100" placeholder="Frais banque (%)"
-              value={bankFeePct} onChange={(e) => setBankFeePct(e.target.value)}
-              className="w-full rounded-xl border border-neutral-300 px-4 py-2.5 text-sm outline-none focus:border-neutral-500"
-            />
-            <input
-              type="date" value={spentAt} onChange={(e) => setSpentAt(e.target.value)}
-              className="rounded-xl border border-neutral-300 px-4 py-2.5 text-sm outline-none focus:border-neutral-500"
-            />
-          </div>
-
-          <input
-            type="text" placeholder="Note (optionnel)"
-            value={note} onChange={(e) => setNote(e.target.value)}
-            className="rounded-xl border border-neutral-300 px-4 py-2.5 text-sm outline-none focus:border-neutral-500"
-          />
-
-          {/* Aperçu conversion temps réel */}
-          {previewError && <p className="text-xs text-red-600">{previewError}</p>}
-          {previewBase !== null && !previewError && (
-            <div className="rounded-xl bg-neutral-50 px-4 py-2.5 text-sm">
-              ≈ <strong>{previewBase.toFixed(2)} {trip.base_currency}</strong>
-              {feePctNum > 0 && (
-                <span className="text-neutral-500"> · coût réel {previewWithFee!.toFixed(2)} {trip.base_currency} (frais inclus)</span>
-              )}
-            </div>
-          )}
-
-          {expenseError && <p className="text-xs text-red-600">{expenseError}</p>}
-
-          <button
-            type="submit"
-            disabled={savingExpense || !rates || amountLocalNum <= 0}
-            className="mt-1 rounded-xl bg-neutral-900 text-white py-2.5 font-medium text-sm hover:bg-neutral-800 transition disabled:opacity-50"
-          >
-            {savingExpense ? 'Ajout...' : 'Ajouter la dépense'}
-          </button>
-        </form>
+        <SpendingChart expenses={filteredExpenses} baseCurrency={trip.base_currency} />
 
         {/* Liste des dépenses */}
-        <h2 className="text-sm font-medium text-neutral-500 mb-3">Dépenses</h2>
         {loadingExpenses ? (
           <p className="text-sm text-neutral-400">Chargement...</p>
-        ) : expenses.length === 0 ? (
-          <p className="text-sm text-neutral-400">Aucune dépense pour l&apos;instant.</p>
+        ) : filteredExpenses.length === 0 ? (
+          <p className="text-sm text-neutral-400">
+            {expenses.length === 0 ? 'Aucune dépense pour l’instant.' : 'Aucune dépense sur cette période.'}
+          </p>
         ) : (
           <ul className="flex flex-col gap-2">
-            {expenses.map((exp) => {
+            {filteredExpenses.map((exp) => {
               const cat = exp.category_id ? categoriesById[exp.category_id] : null
               return (
-                <li key={exp.id} className="rounded-xl border border-neutral-200 bg-white px-4 py-3 flex items-center justify-between">
+                <li
+                  key={exp.id}
+                  className={`rounded-xl border bg-white px-4 py-3 flex items-center justify-between ${editingExpense?.id === exp.id ? 'border-neutral-900' : 'border-neutral-200'}`}
+                >
                   <div>
                     <div className="text-sm font-medium">
                       {exp.amount_local} {exp.currency_local}
@@ -471,9 +309,10 @@ export default function TripDetailPage() {
                       {exp.bank_fee_pct > 0 && ` · frais ${exp.bank_fee_pct}%`}
                     </div>
                   </div>
-                  <button onClick={() => deleteExpense(exp.id)} className="text-xs text-neutral-400 hover:text-red-600">
-                    ✕
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <button onClick={() => startEditExpense(exp)} className="text-xs text-neutral-400 hover:text-neutral-800">✏️</button>
+                    <button onClick={() => deleteExpense(exp.id)} className="text-xs text-neutral-400 hover:text-red-600">✕</button>
+                  </div>
                 </li>
               )
             })}
