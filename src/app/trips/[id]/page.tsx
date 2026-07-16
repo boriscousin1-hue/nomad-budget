@@ -20,6 +20,7 @@ import RecurringManager from '@/components/RecurringManager'
 import ItineraryManager from '@/components/ItineraryManager'
 import BookingManager from '@/components/BookingManager'
 import TripSummaryView from '@/components/TripSummary'
+import Button from '@/components/Button'
 import SpendingChart from '@/components/SpendingChart'
 import AnimatedNumber from '@/components/AnimatedNumber'
 import BurnRate from '@/components/BurnRate'
@@ -56,6 +57,7 @@ export default function TripDetailPage() {
   const [legs, setLegs] = useState<Leg[]>([])
   const [bookings, setBookings] = useState<Booking[]>([])
   const [showSummary, setShowSummary] = useState(false)
+  const [shareMsg, setShareMsg] = useState<string | null>(null)
 
   const [rates, setRates] = useState<RatesResponse | null>(null)
   const [ratesError, setRatesError] = useState<string | null>(null)
@@ -205,6 +207,34 @@ export default function TripDetailPage() {
     () => Object.fromEntries(categories.map((c) => [c.id, c])),
     [categories]
   )
+
+  const shareTrip = async () => {
+    if (!trip) return
+    let token = trip.share_token
+    if (!token) {
+      token = (crypto.randomUUID?.() || `${Date.now()}${Math.random()}`).replace(/[^a-z0-9]/gi, '').slice(0, 16)
+      const { error } = await supabase.from('trips').update({ share_token: token }).eq('id', trip.id)
+      if (error) { alert(error.message); return }
+      setTrip({ ...trip, share_token: token })
+    }
+    const url = `${window.location.origin}/share/${token}`
+    try {
+      await navigator.clipboard.writeText(url)
+      setShareMsg('Lien copié ! ' + url)
+    } catch {
+      setShareMsg(url)
+    }
+    setTimeout(() => setShareMsg(null), 5000)
+  }
+
+  const unshareTrip = async () => {
+    if (!trip?.share_token) return
+    const { error } = await supabase.from('trips').update({ share_token: null }).eq('id', trip.id)
+    if (error) { alert(error.message); return }
+    setTrip({ ...trip, share_token: null })
+    setShareMsg('Partage désactivé')
+    setTimeout(() => setShareMsg(null), 3000)
+  }
 
   if (userLoading || trip === undefined) return null
   if (!user) return null // useUser() redirige déjà vers /login ; assertion pour TS ci-dessous
@@ -406,6 +436,20 @@ export default function TripDetailPage() {
                 >
                   <div className="pt-3">
                     <TripSummaryView summary={summary} baseCurrency={trip.base_currency} />
+                    <div className="mt-4 flex flex-col items-center gap-2">
+                      <div className="flex items-center gap-2">
+                        <Button size="sm" onClick={shareTrip}>🔗 {trip.share_token ? 'Copier le lien de partage' : 'Partager ce bilan'}</Button>
+                        {trip.share_token && (
+                          <button onClick={unshareTrip} className="text-[13px] text-faint hover:text-[var(--color-danger)] transition-colors">
+                            Arrêter le partage
+                          </button>
+                        )}
+                      </div>
+                      {shareMsg && <p className="text-[13px] text-accent text-center break-all">{shareMsg}</p>}
+                      {trip.share_token && !shareMsg && (
+                        <p className="text-[12px] text-faint">Lien public actif — visible sans compte.</p>
+                      )}
+                    </div>
                   </div>
                 </motion.div>
               )}

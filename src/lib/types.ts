@@ -6,6 +6,7 @@ export type Trip = {
   total_budget: number | null
   start_date: string | null
   end_date: string | null
+  share_token?: string | null
 }
 
 export type Category = {
