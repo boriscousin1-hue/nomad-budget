@@ -15,6 +15,8 @@ import IncomeForm from '@/components/IncomeForm'
 import CategoryManager from '@/components/CategoryManager'
 import SpendingChart from '@/components/SpendingChart'
 import AnimatedNumber from '@/components/AnimatedNumber'
+import BurnRate from '@/components/BurnRate'
+import QuickConverter from '@/components/QuickConverter'
 
 const PAYMENT_ICON: Record<string, string> = Object.fromEntries(PAYMENT_METHODS.map((m) => [m.value, m.icon]))
 
@@ -295,6 +297,13 @@ export default function TripDetailPage() {
                 )}
               </div>
             )}
+          </motion.div>
+
+          <motion.div variants={fadeUp}>
+            <BurnRate trip={trip} expenses={expenses} totalSpent={totalSpent} />
+          </motion.div>
+          <motion.div variants={fadeUp}>
+            <QuickConverter rates={rates} baseCurrency={trip.base_currency} />
           </motion.div>
         </motion.div>
 
