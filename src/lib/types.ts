@@ -58,6 +58,30 @@ export type Withdrawal = {
   withdrawn_at: string
 }
 
+export type BookingKind = 'flight' | 'hotel' | 'train' | 'bus' | 'car' | 'other'
+
+export const BOOKING_KINDS: { value: BookingKind; label: string; icon: string }[] = [
+  { value: 'flight', label: 'Vol', icon: '✈️' },
+  { value: 'hotel', label: 'Hôtel', icon: '🏨' },
+  { value: 'train', label: 'Train', icon: '🚆' },
+  { value: 'bus', label: 'Bus', icon: '🚌' },
+  { value: 'car', label: 'Voiture', icon: '🚗' },
+  { value: 'other', label: 'Autre', icon: '📋' },
+]
+
+export type Booking = {
+  id: string
+  kind: BookingKind
+  title: string
+  confirmation: string | null
+  start_date: string
+  end_date: string | null
+  price: number | null
+  currency: string | null
+  note: string | null
+  created_at: string
+}
+
 export type Leg = {
   id: string
   country: string
