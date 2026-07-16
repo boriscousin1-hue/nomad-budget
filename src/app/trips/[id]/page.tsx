@@ -9,6 +9,7 @@ import { useUser } from '@/lib/useUser'
 import { fetchRates, type RatesResponse } from '@/lib/exchangeRates'
 import { downloadCsv } from '@/lib/csv'
 import { dueRecurring } from '@/lib/recurring'
+import { buildSummary } from '@/lib/summary'
 import { fadeUp, stagger, easeApple } from '@/lib/motion'
 import { PAYMENT_METHODS, type Trip, type Category, type Expense, type Income, type Withdrawal, type Recurring, type Leg, type Booking } from '@/lib/types'
 import ExpenseForm from '@/components/ExpenseForm'
@@ -18,6 +19,7 @@ import CategoryManager from '@/components/CategoryManager'
 import RecurringManager from '@/components/RecurringManager'
 import ItineraryManager from '@/components/ItineraryManager'
 import BookingManager from '@/components/BookingManager'
+import TripSummaryView from '@/components/TripSummary'
 import SpendingChart from '@/components/SpendingChart'
 import AnimatedNumber from '@/components/AnimatedNumber'
 import BurnRate from '@/components/BurnRate'
@@ -53,6 +55,7 @@ export default function TripDetailPage() {
 
   const [legs, setLegs] = useState<Leg[]>([])
   const [bookings, setBookings] = useState<Booking[]>([])
+  const [showSummary, setShowSummary] = useState(false)
 
   const [rates, setRates] = useState<RatesResponse | null>(null)
   const [ratesError, setRatesError] = useState<string | null>(null)
@@ -238,6 +241,8 @@ export default function TripDetailPage() {
     return Object.entries(wallet).filter(([, v]) => Math.abs(v) > 0.005).sort(([a], [b]) => a.localeCompare(b))
   })()
 
+  const summary = buildSummary(trip, expenses, incomes, withdrawals, categories, legs)
+
   const categoryBreakdown = categories
     .map((cat) => ({
       ...cat,
@@ -382,6 +387,31 @@ export default function TripDetailPage() {
             <QuickConverter rates={rates} baseCurrency={trip.base_currency} />
           </motion.div>
         </motion.div>
+
+        {/* ── Bilan du voyage ─────────────────────────────────── */}
+        {expenses.length > 0 && (
+          <div className="mb-6">
+            <button
+              onClick={() => setShowSummary((v) => !v)}
+              className="w-full card px-5 py-3.5 flex items-center justify-between hover:shadow-[var(--shadow-lift)] transition-shadow"
+            >
+              <span className="text-[15px] font-medium">📊 Bilan du voyage</span>
+              <span className={`text-faint transition-transform ${showSummary ? 'rotate-90' : ''}`}>›</span>
+            </button>
+            <AnimatePresence initial={false}>
+              {showSummary && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.35, ease: easeApple }} className="overflow-hidden"
+                >
+                  <div className="pt-3">
+                    <TripSummaryView summary={summary} baseCurrency={trip.base_currency} />
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
 
         <ItineraryManager
           tripId={trip.id}
