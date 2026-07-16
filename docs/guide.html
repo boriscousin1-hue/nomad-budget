@@ -1,0 +1,342 @@
+<title>Nomad Budget — Guide</title>
+<style>
+  :root {
+    --bg: #f5f5f7;
+    --surface: #ffffff;
+    --surface-2: #fbfbfd;
+    --ink: #1d1d1f;
+    --muted: #6e6e73;
+    --faint: #86868b;
+    --line: rgba(0, 0, 0, 0.09);
+    --accent: #0071e3;
+    --accent-soft: rgba(0, 113, 227, 0.08);
+    --warn: #a85a00;
+    --warn-soft: rgba(168, 90, 0, 0.09);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 12px 34px -14px rgba(0, 0, 0, 0.16);
+    --radius: 22px;
+    --maxw: 720px;
+    --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+      "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0b0b0c;
+      --surface: #18181a;
+      --surface-2: #1f1f22;
+      --ink: #f5f5f7;
+      --muted: #a1a1a6;
+      --faint: #8a8a8f;
+      --line: rgba(255, 255, 255, 0.11);
+      --accent: #4aa3ff;
+      --accent-soft: rgba(74, 163, 255, 0.13);
+      --warn: #ffb340;
+      --warn-soft: rgba(255, 179, 64, 0.12);
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 16px 40px -18px rgba(0, 0, 0, 0.7);
+    }
+  }
+  :root[data-theme="light"] {
+    --bg: #f5f5f7; --surface: #fff; --surface-2: #fbfbfd; --ink: #1d1d1f;
+    --muted: #6e6e73; --faint: #86868b; --line: rgba(0,0,0,.09);
+    --accent: #0071e3; --accent-soft: rgba(0,113,227,.08); --warn: #a85a00;
+    --warn-soft: rgba(168,90,0,.09);
+    --shadow: 0 1px 2px rgba(0,0,0,.04), 0 12px 34px -14px rgba(0,0,0,.16);
+  }
+  :root[data-theme="dark"] {
+    --bg: #0b0b0c; --surface: #18181a; --surface-2: #1f1f22; --ink: #f5f5f7;
+    --muted: #a1a1a6; --faint: #8a8a8f; --line: rgba(255,255,255,.11);
+    --accent: #4aa3ff; --accent-soft: rgba(74,163,255,.13); --warn: #ffb340;
+    --warn-soft: rgba(255,179,64,.12);
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 16px 40px -18px rgba(0,0,0,.7);
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background:
+      radial-gradient(48rem 30rem at 50% -8%, var(--accent-soft), transparent 70%),
+      var(--bg);
+    color: var(--ink);
+    font-family: var(--font);
+    line-height: 1.55;
+    letter-spacing: -0.011em;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 24px 96px; }
+
+  .eyebrow {
+    font-size: 12px; font-weight: 600; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--accent);
+  }
+  h1 { font-size: clamp(36px, 6vw, 54px); line-height: 1.03; font-weight: 600;
+    letter-spacing: -0.03em; margin: 14px 0 0; text-wrap: balance; }
+  h2 { font-size: clamp(24px, 3.6vw, 30px); font-weight: 600; letter-spacing: -0.02em;
+    margin: 0 0 6px; text-wrap: balance; }
+  h3 { font-size: 17px; font-weight: 600; margin: 0 0 3px; letter-spacing: -0.01em; }
+  p { margin: 0; color: var(--muted); }
+  .lead { font-size: clamp(17px, 2.4vw, 20px); color: var(--muted); margin-top: 18px;
+    max-width: 34em; text-wrap: pretty; }
+  strong { color: var(--ink); font-weight: 600; }
+  .tnum { font-variant-numeric: tabular-nums; }
+
+  /* Hero */
+  header { padding: 84px 0 56px; text-align: center; }
+  .mark {
+    width: 76px; height: 76px; border-radius: 22px; margin: 0 auto;
+    display: flex; align-items: center; justify-content: center; font-size: 38px;
+    background: linear-gradient(150deg, #3a93ff, #0058c8);
+    box-shadow: 0 10px 30px -8px rgba(0, 88, 200, 0.5);
+  }
+  header .lead { margin-left: auto; margin-right: auto; }
+
+  section { margin-top: 60px; }
+  .section-head { margin-bottom: 24px; }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+  }
+
+  /* Problem / solution split */
+  .duo { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .duo .card { padding: 24px; }
+  .duo .tag { font-size: 12px; font-weight: 600; letter-spacing: 0.06em;
+    text-transform: uppercase; margin-bottom: 10px; }
+  .tag.pain { color: var(--warn); }
+  .tag.gain { color: var(--accent); }
+  .duo p { font-size: 15px; }
+
+  /* Steps */
+  .steps { display: flex; flex-direction: column; gap: 14px; counter-reset: step; }
+  .step { display: grid; grid-template-columns: 44px 1fr; gap: 18px; align-items: start;
+    padding: 22px 24px; }
+  .step .num {
+    counter-increment: step; width: 34px; height: 34px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px; font-weight: 600; color: #fff;
+    background: var(--accent); box-shadow: 0 4px 12px -4px var(--accent);
+  }
+  .step p { font-size: 15px; margin-top: 4px; }
+  .step .hint { display: inline-block; margin-top: 8px; font-size: 13px;
+    color: var(--faint); }
+
+  /* Hidden-fee highlight */
+  .fee { padding: 28px; background:
+      linear-gradient(180deg, var(--warn-soft), transparent), var(--surface);
+    border: 1px solid var(--line); }
+  .fee .example {
+    margin-top: 18px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+    font-size: 15px;
+  }
+  .chip {
+    display: inline-flex; align-items: baseline; gap: 6px;
+    background: var(--surface-2); border: 1px solid var(--line);
+    border-radius: 12px; padding: 8px 12px; font-weight: 600; color: var(--ink);
+  }
+  .chip small { font-weight: 400; color: var(--faint); font-size: 12px; }
+  .arrow { color: var(--faint); }
+  .chip.hot { color: var(--warn); border-color: var(--warn-soft);
+    background: var(--warn-soft); }
+
+  /* Features grid */
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .feat { padding: 20px 22px; }
+  .feat .ic { font-size: 22px; }
+  .feat h3 { margin-top: 12px; }
+  .feat p { font-size: 14px; margin-top: 2px; }
+
+  /* Footer */
+  footer { margin-top: 72px; padding-top: 28px; border-top: 1px solid var(--line);
+    text-align: center; }
+  footer a { color: var(--accent); text-decoration: none; font-weight: 500; }
+  footer .small { font-size: 13px; color: var(--faint); margin-top: 10px; }
+
+  @media (max-width: 620px) {
+    .duo, .grid { grid-template-columns: 1fr; }
+    header { padding: 60px 0 40px; }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    section, header > * { animation: rise 0.6s cubic-bezier(0.22, 1, 0.36, 1) both; }
+    header .mark { animation-delay: 0.02s; }
+    header h1 { animation-delay: 0.06s; }
+    header .lead { animation-delay: 0.12s; }
+  }
+  @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+
+  /* PDF / impression : fond clair, sans ombres, coupures propres */
+  @media print {
+    :root { --bg: #fff; --surface: #fff; --surface-2: #fff; --ink: #111;
+      --muted: #444; --faint: #666; --line: #e2e2e2; --shadow: none; }
+    body { background: #fff; }
+    header { padding: 24px 0 16px; }
+    section { margin-top: 30px; break-inside: avoid; }
+    .card, .step, .feat, .fee { break-inside: avoid; }
+    .mark { box-shadow: none; }
+    a { color: #111; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header>
+    <div class="mark">🧭</div>
+    <h1>Nomad Budget</h1>
+    <p class="lead">Sais exactement combien te coûte <strong>vraiment</strong> ton voyage — dépense en monnaie locale, vois l&rsquo;impact réel sur ton budget, frais bancaires cachés compris.</p>
+  </header>
+
+  <section>
+    <div class="section-head">
+      <div class="eyebrow">À quoi ça sert</div>
+      <h2>Voyager sans perdre le fil de son budget</h2>
+    </div>
+    <div class="duo">
+      <div class="card">
+        <div class="tag pain">Le problème</div>
+        <p>En voyage, tu paies en bahts, dongs, pesos… Tu convertis de tête, tu oublies. Et ta banque prélève <strong>1 à 3 % de frais de change invisibles</strong> à chaque paiement. À la fin, l&rsquo;addition ne ressemble jamais à ce que tu avais prévu.</p>
+      </div>
+      <div class="card">
+        <div class="tag gain">La solution</div>
+        <p>Tu saisis chaque dépense dans la devise du pays. Nomad Budget la <strong>convertit au taux du jour</strong>, y ajoute tes frais bancaires, et met à jour ton budget <strong>en temps réel</strong>. Plus de mauvaise surprise.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <div class="eyebrow">Pour qui</div>
+      <h2>Pensé pour les voyageurs au long cours</h2>
+    </div>
+    <div class="card" style="padding:24px">
+      <p style="font-size:15px">Nomades digitaux, backpackers, expats, tours du monde — toute personne qui jongle avec <strong>plusieurs devises</strong> sur <strong>plusieurs semaines ou mois</strong> et qui veut garder la maîtrise de ses dépenses, appareil dans la poche.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <div class="eyebrow">Comment ça marche</div>
+      <h2>Six étapes, de l&rsquo;inscription au suivi</h2>
+    </div>
+    <div class="steps">
+      <div class="card step">
+        <div class="num"></div>
+        <div>
+          <h3>Crée ton compte</h3>
+          <p>Email et mot de passe, c&rsquo;est tout. Tes données sont privées et synchronisées entre ton téléphone et ton ordinateur.</p>
+        </div>
+      </div>
+      <div class="card step">
+        <div class="num"></div>
+        <div>
+          <h3>Crée un voyage</h3>
+          <p>Donne-lui un nom, choisis sa <strong>devise de base</strong> (celle dans laquelle tu raisonnes, ex. l&rsquo;euro) et, si tu veux, un budget total et des dates.</p>
+          <span class="hint">Ex. « Asie du Sud-Est 2026 » · base EUR · budget 3 000 €</span>
+        </div>
+      </div>
+      <div class="card step">
+        <div class="num"></div>
+        <div>
+          <h3>Ajoute des catégories <span style="color:var(--faint);font-weight:400">(optionnel)</span></h3>
+          <p>Nourriture, logement, transport, activités… avec une icône et, si tu veux, un budget par catégorie pour ne pas déraper sur un poste précis.</p>
+        </div>
+      </div>
+      <div class="card step">
+        <div class="num"></div>
+        <div>
+          <h3>Saisis une dépense en monnaie locale</h3>
+          <p>Tape le montant, choisis la devise du pays, indique ton pourcentage de frais bancaires. La conversion s&rsquo;affiche <strong>instantanément</strong>, avant même de valider.</p>
+        </div>
+      </div>
+      <div class="card step">
+        <div class="num"></div>
+        <div>
+          <h3>Suis ton budget en temps réel</h3>
+          <p>Total dépensé, reste du budget, barre de progression, répartition par catégorie et montant des <strong>frais cachés cumulés</strong> — tout se met à jour à chaque dépense.</p>
+        </div>
+      </div>
+      <div class="card step">
+        <div class="num"></div>
+        <div>
+          <h3>Filtre et exporte</h3>
+          <p>Isole une période avec le filtre de dates, visualise tes dépenses jour par jour sur le graphique, et exporte tout en <strong>CSV</strong> (ouvrable dans Excel ou Google Sheets).</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <div class="eyebrow">Le détail qui change tout</div>
+      <h2>Les frais bancaires, enfin visibles</h2>
+    </div>
+    <div class="card fee">
+      <p style="font-size:15px">La plupart des apps de budget affichent le taux de change officiel et s&rsquo;arrêtent là. Nomad Budget va plus loin&nbsp;: il applique <strong>ta marge bancaire réelle</strong> pour te montrer ce que la dépense te coûte <em>vraiment</em>.</p>
+      <div class="example tnum">
+        <span class="chip">500 THB <small>dépensés</small></span>
+        <span class="arrow">→</span>
+        <span class="chip">13,08 € <small>taux du jour</small></span>
+        <span class="arrow">+</span>
+        <span class="chip hot">0,33 € <small>frais cachés (2,5 %)</small></span>
+        <span class="arrow">=</span>
+        <span class="chip">13,41 € <small>coût réel</small></span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <div class="eyebrow">Ce que tu peux faire</div>
+      <h2>Tout est là</h2>
+    </div>
+    <div class="grid">
+      <div class="card feat">
+        <div class="ic">🌍</div>
+        <h3>160+ devises</h3>
+        <p>Taux de change réels, mis à jour chaque jour, du baht au peso.</p>
+      </div>
+      <div class="card feat">
+        <div class="ic">👛</div>
+        <h3>Frais cachés révélés</h3>
+        <p>Ta marge bancaire appliquée à chaque dépense, cumulée en un coup d&rsquo;œil.</p>
+      </div>
+      <div class="card feat">
+        <div class="ic">🗂️</div>
+        <h3>Catégories &amp; budgets</h3>
+        <p>Un budget par poste, avec alerte visuelle quand tu le dépasses.</p>
+      </div>
+      <div class="card feat">
+        <div class="ic">✈️</div>
+        <h3>Plusieurs voyages</h3>
+        <p>Chaque voyage a sa devise, son budget et son historique séparés.</p>
+      </div>
+      <div class="card feat">
+        <div class="ic">📊</div>
+        <h3>Vue d&rsquo;ensemble</h3>
+        <p>Total, reste, répartition et graphique des dépenses jour par jour.</p>
+      </div>
+      <div class="card feat">
+        <div class="ic">📥</div>
+        <h3>Export CSV</h3>
+        <p>Récupère toutes tes dépenses filtrées pour Excel ou Google Sheets.</p>
+      </div>
+      <div class="card feat">
+        <div class="ic">📱</div>
+        <h3>Multi-appareils</h3>
+        <p>Saisis sur le téléphone en voyage, relis sur l&rsquo;ordinateur au retour.</p>
+      </div>
+      <div class="card feat">
+        <div class="ic">🔒</div>
+        <h3>Privé</h3>
+        <p>Tes données n&rsquo;appartiennent qu&rsquo;à toi — cloisonnées par compte.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <p style="color:var(--ink);font-weight:600;font-size:16px">🧭 Nomad Budget</p>
+    <p class="small">Suis tes dépenses de voyage, en devise locale, sans mauvaise surprise.<br>
+      <a href="https://nomad-budget-ugc1.vercel.app">nomad-budget-ugc1.vercel.app</a></p>
+  </footer>
+
+</div>

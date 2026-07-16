@@ -9,11 +9,14 @@ import { useUser } from '@/lib/useUser'
 import { fetchRates, type RatesResponse } from '@/lib/exchangeRates'
 import { downloadCsv } from '@/lib/csv'
 import { fadeUp, stagger, easeApple } from '@/lib/motion'
-import type { Trip, Category, Expense } from '@/lib/types'
+import { PAYMENT_METHODS, type Trip, type Category, type Expense, type Income } from '@/lib/types'
 import ExpenseForm from '@/components/ExpenseForm'
+import IncomeForm from '@/components/IncomeForm'
 import CategoryManager from '@/components/CategoryManager'
 import SpendingChart from '@/components/SpendingChart'
 import AnimatedNumber from '@/components/AnimatedNumber'
+
+const PAYMENT_ICON: Record<string, string> = Object.fromEntries(PAYMENT_METHODS.map((m) => [m.value, m.icon]))
 
 export default function TripDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -28,6 +31,10 @@ export default function TripDetailPage() {
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [loadingExpenses, setLoadingExpenses] = useState(true)
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null)
+
+  const [incomes, setIncomes] = useState<Income[]>([])
+  const [editingIncome, setEditingIncome] = useState<Income | null>(null)
+  const [showIncome, setShowIncome] = useState(false)
 
   const [rates, setRates] = useState<RatesResponse | null>(null)
   const [ratesError, setRatesError] = useState<string | null>(null)
@@ -62,6 +69,9 @@ export default function TripDetailPage() {
         // Devise par défaut du formulaire : la dernière utilisée, sinon la devise de base.
         setDefaultCurrency(rows[0]?.currency_local || trip.base_currency)
       })
+    supabase.from('incomes').select('*').eq('trip_id', trip.id)
+      .order('received_at', { ascending: false }).order('created_at', { ascending: false })
+      .then(({ data }) => setIncomes((data as Income[]) || []))
     supabase.from('user_settings').select('default_bank_fee_pct').eq('user_id', user.id).maybeSingle()
       .then(({ data }) => setDefaultBankFeePct(String(data?.default_bank_fee_pct ?? 0)))
     loadRates(trip.base_currency)
@@ -102,6 +112,25 @@ export default function TripDetailPage() {
     document.getElementById('expense-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
+  const deleteIncome = async (incomeId: string) => {
+    if (!confirm('Supprimer ce revenu ?')) return
+    const { error } = await supabase.from('incomes').delete().eq('id', incomeId)
+    if (error) { alert(error.message); return }
+    setIncomes((prev) => prev.filter((i) => i.id !== incomeId))
+    if (editingIncome?.id === incomeId) setEditingIncome(null)
+  }
+
+  const handleIncomeSaved = (income: Income, isNew: boolean) => {
+    setIncomes((prev) => (isNew ? [income, ...prev] : prev.map((i) => (i.id === income.id ? income : i))))
+    setShowIncome(true)
+  }
+
+  const startEditIncome = (inc: Income) => {
+    setEditingIncome(inc)
+    setShowIncome(true)
+    document.getElementById('income-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
   const categoriesById = useMemo(
     () => Object.fromEntries(categories.map((c) => [c.id, c])),
     [categories]
@@ -128,6 +157,8 @@ export default function TripDetailPage() {
   const totalSpent = expenses.reduce((sum, e) => sum + e.amount_base_with_fee, 0)
   const totalFees = expenses.reduce((sum, e) => sum + (e.amount_base_with_fee - e.amount_base), 0)
   const remaining = trip.total_budget != null ? trip.total_budget - totalSpent : null
+  const totalIncome = incomes.reduce((sum, i) => sum + i.amount_base, 0)
+  const netBalance = totalIncome - totalSpent // solde net : revenus − dépenses
 
   const categoryBreakdown = categories
     .map((cat) => ({
@@ -212,6 +243,22 @@ export default function TripDetailPage() {
               <div className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-[var(--color-warn)]/[0.1] text-[var(--color-warn)] px-3 py-1.5 text-[13px]">
                 <span>👛</span>
                 <span className="tnum">{totalFees.toFixed(2)} {trip.base_currency}</span> de frais bancaires cachés
+              </div>
+            )}
+
+            {/* Revenus & solde net (si des revenus existent) */}
+            {totalIncome > 0 && (
+              <div className="mt-6 pt-6 border-t border-[var(--color-line)] flex items-center justify-between">
+                <div>
+                  <div className="text-[13px] text-muted">Revenus</div>
+                  <div className="text-[17px] font-semibold tnum text-[#1f9d4d]">+{totalIncome.toFixed(2)} {trip.base_currency}</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-[13px] text-muted">Solde net</div>
+                  <div className={`text-[17px] font-semibold tnum ${netBalance < 0 ? 'text-[var(--color-danger)]' : 'text-[#1f9d4d]'}`}>
+                    {netBalance >= 0 ? '+' : ''}{netBalance.toFixed(2)} {trip.base_currency}
+                  </div>
+                </div>
               </div>
             )}
 
@@ -333,6 +380,7 @@ export default function TripDetailPage() {
                   >
                     <div className="min-w-0">
                       <div className="text-[15px] font-medium tnum">
+                        <span className="mr-1" title={exp.payment_method}>{PAYMENT_ICON[exp.payment_method] || '💳'}</span>
                         {exp.amount_local} {exp.currency_local}
                         <span className="text-faint font-normal"> → {exp.amount_base_with_fee.toFixed(2)} {trip.base_currency}</span>
                       </div>
@@ -353,6 +401,72 @@ export default function TripDetailPage() {
             </AnimatePresence>
           </motion.ul>
         )}
+
+        {/* ── Revenus ─────────────────────────────────────────── */}
+        <div className="mt-10">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-[13px] font-medium text-muted uppercase tracking-wide">
+              Revenus{incomes.length > 0 && <span className="text-faint normal-case"> · {totalIncome.toFixed(2)} {trip.base_currency}</span>}
+            </h2>
+            <button
+              onClick={() => { setShowIncome((v) => !v); setEditingIncome(null) }}
+              className="text-[13px] rounded-full bg-black/[0.05] hover:bg-black/[0.09] text-ink px-3.5 py-1.5 font-medium transition-colors"
+            >
+              {showIncome ? 'Fermer' : '+ Revenu'}
+            </button>
+          </div>
+
+          <AnimatePresence initial={false}>
+            {showIncome && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.35, ease: easeApple }} className="overflow-hidden"
+              >
+                <IncomeForm
+                  tripId={trip.id}
+                  userId={user.id}
+                  baseCurrency={trip.base_currency}
+                  rates={rates}
+                  defaultCurrency={defaultCurrency}
+                  editingIncome={editingIncome}
+                  onSaved={handleIncomeSaved}
+                  onCancelEdit={() => setEditingIncome(null)}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {incomes.length > 0 && (
+            <motion.ul layout className="flex flex-col gap-2">
+              <AnimatePresence initial={false}>
+                {incomes.map((inc) => (
+                  <motion.li
+                    key={inc.id}
+                    layout
+                    initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96 }}
+                    transition={{ duration: 0.3, ease: easeApple }}
+                    className={`group rounded-2xl bg-surface border px-4 py-3.5 flex items-center justify-between shadow-[var(--shadow-card)] transition-colors ${editingIncome?.id === inc.id ? 'border-accent' : 'border-[var(--color-line)]'}`}
+                  >
+                    <div className="min-w-0">
+                      <div className="text-[15px] font-medium tnum text-[#1f9d4d]">
+                        +{inc.amount_local} {inc.currency_local}
+                        <span className="text-faint font-normal"> → {inc.amount_base.toFixed(2)} {trip.base_currency}</span>
+                      </div>
+                      <div className="text-[13px] text-faint truncate">
+                        {new Date(inc.received_at).toLocaleDateString('fr-FR')}
+                        {inc.source && ` · ${inc.source}`}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0 ml-2">
+                      <button onClick={() => startEditIncome(inc)} className="text-faint hover:text-ink transition-colors h-8 w-8 rounded-full hover:bg-black/[0.05] flex items-center justify-center text-sm">✏️</button>
+                      <button onClick={() => deleteIncome(inc.id)} className="text-faint hover:text-[var(--color-danger)] transition-colors h-8 w-8 rounded-full hover:bg-black/[0.05] flex items-center justify-center">✕</button>
+                    </div>
+                  </motion.li>
+                ))}
+              </AnimatePresence>
+            </motion.ul>
+          )}
+        </div>
       </main>
     </div>
   )

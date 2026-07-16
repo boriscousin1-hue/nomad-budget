@@ -5,7 +5,7 @@ import { motion } from 'framer-motion'
 import { supabase } from '@/lib/supabase'
 import { CURRENCIES } from '@/lib/currencies'
 import { localToBaseRate, withBankFee, type RatesResponse } from '@/lib/exchangeRates'
-import type { Category, Expense } from '@/lib/types'
+import { PAYMENT_METHODS, type Category, type Expense, type PaymentMethod } from '@/lib/types'
 import Button from '@/components/Button'
 
 type Props = {
@@ -35,6 +35,7 @@ export default function ExpenseForm({
   const [amountLocal, setAmountLocal] = useState('')
   const [currencyLocal, setCurrencyLocal] = useState('')
   const [categoryId, setCategoryId] = useState('')
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('card')
   const [bankFeePct, setBankFeePct] = useState('')
   const [note, setNote] = useState('')
   const [spentAt, setSpentAt] = useState(todayISO())
@@ -56,6 +57,7 @@ export default function ExpenseForm({
       setAmountLocal(String(editingExpense.amount_local))
       setCurrencyLocal(editingExpense.currency_local)
       setCategoryId(editingExpense.category_id || '')
+      setPaymentMethod(editingExpense.payment_method || 'card')
       setBankFeePct(String(editingExpense.bank_fee_pct))
       setNote(editingExpense.note || '')
       setSpentAt(editingExpense.spent_at)
@@ -105,6 +107,7 @@ export default function ExpenseForm({
       bank_fee_pct: feePctNum,
       amount_base: amountBase,
       amount_base_with_fee: amountBaseWithFee,
+      payment_method: paymentMethod,
       note: note.trim() || null,
       spent_at: spentAt,
     }
@@ -166,6 +169,20 @@ export default function ExpenseForm({
           ))}
         </select>
       )}
+
+      {/* Méthode de paiement — segmented control */}
+      <div className="grid grid-cols-3 gap-1.5 rounded-2xl bg-black/[0.04] p-1">
+        {PAYMENT_METHODS.map((m) => (
+          <button
+            key={m.value} type="button" onClick={() => setPaymentMethod(m.value)}
+            className={`rounded-xl py-2 text-[13px] font-medium transition-colors ${
+              paymentMethod === m.value ? 'bg-surface text-ink shadow-[var(--shadow-card)]' : 'text-muted hover:text-ink'
+            }`}
+          >
+            {m.icon} {m.label}
+          </button>
+        ))}
+      </div>
 
       <div className="grid grid-cols-2 gap-3">
         <div className="relative">
