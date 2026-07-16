@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -8,12 +8,14 @@ import { supabase } from '@/lib/supabase'
 import { useUser } from '@/lib/useUser'
 import { fetchRates, type RatesResponse } from '@/lib/exchangeRates'
 import { downloadCsv } from '@/lib/csv'
+import { dueRecurring } from '@/lib/recurring'
 import { fadeUp, stagger, easeApple } from '@/lib/motion'
-import { PAYMENT_METHODS, type Trip, type Category, type Expense, type Income, type Withdrawal } from '@/lib/types'
+import { PAYMENT_METHODS, type Trip, type Category, type Expense, type Income, type Withdrawal, type Recurring } from '@/lib/types'
 import ExpenseForm from '@/components/ExpenseForm'
 import IncomeForm from '@/components/IncomeForm'
 import WithdrawalForm from '@/components/WithdrawalForm'
 import CategoryManager from '@/components/CategoryManager'
+import RecurringManager from '@/components/RecurringManager'
 import SpendingChart from '@/components/SpendingChart'
 import AnimatedNumber from '@/components/AnimatedNumber'
 import BurnRate from '@/components/BurnRate'
@@ -42,6 +44,10 @@ export default function TripDetailPage() {
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([])
   const [editingWithdrawal, setEditingWithdrawal] = useState<Withdrawal | null>(null)
   const [showWithdrawal, setShowWithdrawal] = useState(false)
+
+  const [recurrings, setRecurrings] = useState<Recurring[]>([])
+  const [recurringLoaded, setRecurringLoaded] = useState(false)
+  const genRef = useRef(false) // garde : génération des récurrentes une seule fois par chargement
 
   const [rates, setRates] = useState<RatesResponse | null>(null)
   const [ratesError, setRatesError] = useState<string | null>(null)
@@ -82,6 +88,8 @@ export default function TripDetailPage() {
     supabase.from('cash_withdrawals').select('*').eq('trip_id', trip.id)
       .order('withdrawn_at', { ascending: false }).order('created_at', { ascending: false })
       .then(({ data }) => setWithdrawals((data as Withdrawal[]) || []))
+    supabase.from('recurring_expenses').select('*').eq('trip_id', trip.id).order('created_at')
+      .then(({ data }) => { setRecurrings((data as Recurring[]) || []); setRecurringLoaded(true) })
     supabase.from('user_settings').select('default_bank_fee_pct').eq('user_id', user.id).maybeSingle()
       .then(({ data }) => setDefaultBankFeePct(String(data?.default_bank_fee_pct ?? 0)))
     loadRates(trip.base_currency)
@@ -96,6 +104,27 @@ export default function TripDetailPage() {
       setRatesError(e instanceof Error ? e.message : 'Erreur de chargement des taux')
     }
   }
+
+  // Génération automatique des dépenses récurrentes dues (une fois par chargement).
+  useEffect(() => {
+    if (genRef.current || !trip || !user || !rates || !recurringLoaded) return
+    genRef.current = true
+    const { toInsert, updates } = dueRecurring(recurrings, rates, trip.id, user.id)
+    if (toInsert.length === 0) return
+    ;(async () => {
+      const { data } = await supabase.from('expenses').insert(toInsert).select()
+      if (data && data.length) {
+        setExpenses((prev) => [...(data as Expense[]), ...prev].sort((a, b) => b.spent_at.localeCompare(a.spent_at)))
+      }
+      for (const u of updates) {
+        await supabase.from('recurring_expenses').update({ last_generated_month: u.last_generated_month }).eq('id', u.id)
+      }
+      setRecurrings((prev) => prev.map((r) => {
+        const u = updates.find((x) => x.id === r.id)
+        return u ? { ...r, last_generated_month: u.last_generated_month } : r
+      }))
+    })()
+  }, [trip, user, rates, recurringLoaded, recurrings])
 
   const deleteTrip = async () => {
     if (!confirm('Supprimer ce voyage et toutes ses dépenses ? Action irréversible.')) return
@@ -601,6 +630,18 @@ export default function TripDetailPage() {
             </motion.ul>
           )}
         </div>
+
+        <RecurringManager
+          tripId={trip.id}
+          userId={user.id}
+          baseCurrency={trip.base_currency}
+          defaultCurrency={defaultCurrency}
+          categories={categories}
+          recurrings={recurrings}
+          onCreated={(r) => setRecurrings((prev) => [...prev, r])}
+          onUpdated={(r) => setRecurrings((prev) => prev.map((x) => (x.id === r.id ? r : x)))}
+          onDeleted={(rid) => setRecurrings((prev) => prev.filter((r) => r.id !== rid))}
+        />
       </main>
     </div>
   )

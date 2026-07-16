@@ -58,6 +58,20 @@ export type Withdrawal = {
   withdrawn_at: string
 }
 
+export type Recurring = {
+  id: string
+  label: string
+  amount_local: number
+  currency_local: string
+  bank_fee_pct: number
+  category_id: string | null
+  payment_method: PaymentMethod
+  day_of_month: number
+  active: boolean
+  last_generated_month: string | null
+  created_at: string
+}
+
 export type UserSettings = {
   home_currency: string
   default_bank_fee_pct: number
