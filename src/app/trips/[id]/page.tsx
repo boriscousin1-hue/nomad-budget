@@ -10,12 +10,13 @@ import { fetchRates, type RatesResponse } from '@/lib/exchangeRates'
 import { downloadCsv } from '@/lib/csv'
 import { dueRecurring } from '@/lib/recurring'
 import { fadeUp, stagger, easeApple } from '@/lib/motion'
-import { PAYMENT_METHODS, type Trip, type Category, type Expense, type Income, type Withdrawal, type Recurring } from '@/lib/types'
+import { PAYMENT_METHODS, type Trip, type Category, type Expense, type Income, type Withdrawal, type Recurring, type Leg } from '@/lib/types'
 import ExpenseForm from '@/components/ExpenseForm'
 import IncomeForm from '@/components/IncomeForm'
 import WithdrawalForm from '@/components/WithdrawalForm'
 import CategoryManager from '@/components/CategoryManager'
 import RecurringManager from '@/components/RecurringManager'
+import ItineraryManager from '@/components/ItineraryManager'
 import SpendingChart from '@/components/SpendingChart'
 import AnimatedNumber from '@/components/AnimatedNumber'
 import BurnRate from '@/components/BurnRate'
@@ -48,6 +49,8 @@ export default function TripDetailPage() {
   const [recurrings, setRecurrings] = useState<Recurring[]>([])
   const [recurringLoaded, setRecurringLoaded] = useState(false)
   const genRef = useRef(false) // garde : génération des récurrentes une seule fois par chargement
+
+  const [legs, setLegs] = useState<Leg[]>([])
 
   const [rates, setRates] = useState<RatesResponse | null>(null)
   const [ratesError, setRatesError] = useState<string | null>(null)
@@ -90,6 +93,8 @@ export default function TripDetailPage() {
       .then(({ data }) => setWithdrawals((data as Withdrawal[]) || []))
     supabase.from('recurring_expenses').select('*').eq('trip_id', trip.id).order('created_at')
       .then(({ data }) => { setRecurrings((data as Recurring[]) || []); setRecurringLoaded(true) })
+    supabase.from('trip_legs').select('*').eq('trip_id', trip.id).order('start_date')
+      .then(({ data }) => setLegs((data as Leg[]) || []))
     supabase.from('user_settings').select('default_bank_fee_pct').eq('user_id', user.id).maybeSingle()
       .then(({ data }) => setDefaultBankFeePct(String(data?.default_bank_fee_pct ?? 0)))
     loadRates(trip.base_currency)
@@ -373,6 +378,17 @@ export default function TripDetailPage() {
             <QuickConverter rates={rates} baseCurrency={trip.base_currency} />
           </motion.div>
         </motion.div>
+
+        <ItineraryManager
+          tripId={trip.id}
+          userId={user.id}
+          baseCurrency={trip.base_currency}
+          legs={legs}
+          expenses={expenses}
+          onCreated={(l) => setLegs((prev) => [...prev, l])}
+          onUpdated={(l) => setLegs((prev) => prev.map((x) => (x.id === l.id ? l : x)))}
+          onDeleted={(lid) => setLegs((prev) => prev.filter((l) => l.id !== lid))}
+        />
 
         <CategoryManager
           tripId={trip.id}

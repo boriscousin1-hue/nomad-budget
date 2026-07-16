@@ -58,6 +58,17 @@ export type Withdrawal = {
   withdrawn_at: string
 }
 
+export type Leg = {
+  id: string
+  country: string
+  city: string | null
+  start_date: string
+  end_date: string | null
+  budget: number | null
+  visa_days: number | null
+  created_at: string
+}
+
 export type Recurring = {
   id: string
   label: string
