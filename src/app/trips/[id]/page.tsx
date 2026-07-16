@@ -9,9 +9,10 @@ import { useUser } from '@/lib/useUser'
 import { fetchRates, type RatesResponse } from '@/lib/exchangeRates'
 import { downloadCsv } from '@/lib/csv'
 import { fadeUp, stagger, easeApple } from '@/lib/motion'
-import { PAYMENT_METHODS, type Trip, type Category, type Expense, type Income } from '@/lib/types'
+import { PAYMENT_METHODS, type Trip, type Category, type Expense, type Income, type Withdrawal } from '@/lib/types'
 import ExpenseForm from '@/components/ExpenseForm'
 import IncomeForm from '@/components/IncomeForm'
+import WithdrawalForm from '@/components/WithdrawalForm'
 import CategoryManager from '@/components/CategoryManager'
 import SpendingChart from '@/components/SpendingChart'
 import AnimatedNumber from '@/components/AnimatedNumber'
@@ -37,6 +38,10 @@ export default function TripDetailPage() {
   const [incomes, setIncomes] = useState<Income[]>([])
   const [editingIncome, setEditingIncome] = useState<Income | null>(null)
   const [showIncome, setShowIncome] = useState(false)
+
+  const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([])
+  const [editingWithdrawal, setEditingWithdrawal] = useState<Withdrawal | null>(null)
+  const [showWithdrawal, setShowWithdrawal] = useState(false)
 
   const [rates, setRates] = useState<RatesResponse | null>(null)
   const [ratesError, setRatesError] = useState<string | null>(null)
@@ -74,6 +79,9 @@ export default function TripDetailPage() {
     supabase.from('incomes').select('*').eq('trip_id', trip.id)
       .order('received_at', { ascending: false }).order('created_at', { ascending: false })
       .then(({ data }) => setIncomes((data as Income[]) || []))
+    supabase.from('cash_withdrawals').select('*').eq('trip_id', trip.id)
+      .order('withdrawn_at', { ascending: false }).order('created_at', { ascending: false })
+      .then(({ data }) => setWithdrawals((data as Withdrawal[]) || []))
     supabase.from('user_settings').select('default_bank_fee_pct').eq('user_id', user.id).maybeSingle()
       .then(({ data }) => setDefaultBankFeePct(String(data?.default_bank_fee_pct ?? 0)))
     loadRates(trip.base_currency)
@@ -133,6 +141,25 @@ export default function TripDetailPage() {
     document.getElementById('income-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
+  const deleteWithdrawal = async (wId: string) => {
+    if (!confirm('Supprimer ce retrait ?')) return
+    const { error } = await supabase.from('cash_withdrawals').delete().eq('id', wId)
+    if (error) { alert(error.message); return }
+    setWithdrawals((prev) => prev.filter((w) => w.id !== wId))
+    if (editingWithdrawal?.id === wId) setEditingWithdrawal(null)
+  }
+
+  const handleWithdrawalSaved = (w: Withdrawal, isNew: boolean) => {
+    setWithdrawals((prev) => (isNew ? [w, ...prev] : prev.map((x) => (x.id === w.id ? w : x))))
+    setShowWithdrawal(true)
+  }
+
+  const startEditWithdrawal = (w: Withdrawal) => {
+    setEditingWithdrawal(w)
+    setShowWithdrawal(true)
+    document.getElementById('withdrawal-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
   const categoriesById = useMemo(
     () => Object.fromEntries(categories.map((c) => [c.id, c])),
     [categories]
@@ -161,6 +188,17 @@ export default function TripDetailPage() {
   const remaining = trip.total_budget != null ? trip.total_budget - totalSpent : null
   const totalIncome = incomes.reduce((sum, i) => sum + i.amount_base, 0)
   const netBalance = totalIncome - totalSpent // solde net : revenus − dépenses
+
+  // Portefeuille cash par devise : liquide retiré − dépenses payées en espèces.
+  const totalWithdrawalFees = withdrawals.reduce((s, w) => s + w.fee_base, 0)
+  const cashWallet = (() => {
+    const wallet: Record<string, number> = {}
+    for (const w of withdrawals) wallet[w.currency_local] = (wallet[w.currency_local] || 0) + w.amount_local
+    for (const e of expenses) {
+      if (e.payment_method === 'cash') wallet[e.currency_local] = (wallet[e.currency_local] || 0) - e.amount_local
+    }
+    return Object.entries(wallet).filter(([, v]) => Math.abs(v) > 0.005).sort(([a], [b]) => a.localeCompare(b))
+  })()
 
   const categoryBreakdown = categories
     .map((cat) => ({
@@ -469,6 +507,93 @@ export default function TripDetailPage() {
                     <div className="flex items-center gap-1 shrink-0 ml-2">
                       <button onClick={() => startEditIncome(inc)} className="text-faint hover:text-ink transition-colors h-8 w-8 rounded-full hover:bg-black/[0.05] flex items-center justify-center text-sm">✏️</button>
                       <button onClick={() => deleteIncome(inc.id)} className="text-faint hover:text-[var(--color-danger)] transition-colors h-8 w-8 rounded-full hover:bg-black/[0.05] flex items-center justify-center">✕</button>
+                    </div>
+                  </motion.li>
+                ))}
+              </AnimatePresence>
+            </motion.ul>
+          )}
+        </div>
+
+        {/* ── Cash & retraits ─────────────────────────────────── */}
+        <div className="mt-10">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-[13px] font-medium text-muted uppercase tracking-wide">Cash &amp; retraits</h2>
+            <button
+              onClick={() => { setShowWithdrawal((v) => !v); setEditingWithdrawal(null) }}
+              className="text-[13px] rounded-full bg-black/[0.05] hover:bg-black/[0.09] text-ink px-3.5 py-1.5 font-medium transition-colors"
+            >
+              {showWithdrawal ? 'Fermer' : '+ Retrait'}
+            </button>
+          </div>
+
+          {/* Portefeuille cash par devise */}
+          {cashWallet.length > 0 && (
+            <div className="card p-5 mb-3">
+              <span className="text-[13px] font-medium text-muted uppercase tracking-wide">Portefeuille (liquide restant)</span>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {cashWallet.map(([cur, amt]) => (
+                  <span
+                    key={cur}
+                    className={`rounded-full border px-3.5 py-1.5 text-[15px] font-medium tnum ${amt < 0 ? 'border-[var(--color-danger)]/40 text-[var(--color-danger)] bg-[var(--color-danger)]/[0.06]' : 'border-[var(--color-line)] bg-surface-2'}`}
+                  >
+                    {amt.toLocaleString('fr-FR', { maximumFractionDigits: 2 })} {cur}
+                  </span>
+                ))}
+              </div>
+              {totalWithdrawalFees > 0 && (
+                <div className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-[var(--color-warn)]/[0.1] text-[var(--color-warn)] px-3 py-1.5 text-[13px]">
+                  <span>🏧</span>
+                  <span className="tnum">{totalWithdrawalFees.toFixed(2)} {trip.base_currency}</span> de frais de retrait
+                </div>
+              )}
+            </div>
+          )}
+
+          <AnimatePresence initial={false}>
+            {showWithdrawal && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.35, ease: easeApple }} className="overflow-hidden"
+              >
+                <WithdrawalForm
+                  tripId={trip.id}
+                  userId={user.id}
+                  baseCurrency={trip.base_currency}
+                  rates={rates}
+                  defaultCurrency={defaultCurrency}
+                  editingWithdrawal={editingWithdrawal}
+                  onSaved={handleWithdrawalSaved}
+                  onCancelEdit={() => setEditingWithdrawal(null)}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {withdrawals.length > 0 && (
+            <motion.ul layout className="flex flex-col gap-2">
+              <AnimatePresence initial={false}>
+                {withdrawals.map((w) => (
+                  <motion.li
+                    key={w.id}
+                    layout
+                    initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96 }}
+                    transition={{ duration: 0.3, ease: easeApple }}
+                    className={`group rounded-2xl bg-surface border px-4 py-3.5 flex items-center justify-between shadow-[var(--shadow-card)] transition-colors ${editingWithdrawal?.id === w.id ? 'border-accent' : 'border-[var(--color-line)]'}`}
+                  >
+                    <div className="min-w-0">
+                      <div className="text-[15px] font-medium tnum">
+                        🏧 {w.amount_local} {w.currency_local}
+                        <span className="text-faint font-normal"> → {w.amount_base.toFixed(2)} {trip.base_currency}</span>
+                      </div>
+                      <div className="text-[13px] text-faint truncate">
+                        {new Date(w.withdrawn_at).toLocaleDateString('fr-FR')}
+                        {w.fee_local > 0 && ` · frais ${w.fee_local} ${w.currency_local}`}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0 ml-2">
+                      <button onClick={() => startEditWithdrawal(w)} className="text-faint hover:text-ink transition-colors h-8 w-8 rounded-full hover:bg-black/[0.05] flex items-center justify-center text-sm">✏️</button>
+                      <button onClick={() => deleteWithdrawal(w.id)} className="text-faint hover:text-[var(--color-danger)] transition-colors h-8 w-8 rounded-full hover:bg-black/[0.05] flex items-center justify-center">✕</button>
                     </div>
                   </motion.li>
                 ))}

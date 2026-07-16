@@ -47,6 +47,17 @@ export type Income = {
   received_at: string
 }
 
+export type Withdrawal = {
+  id: string
+  amount_local: number
+  currency_local: string
+  fee_local: number
+  exchange_rate: number
+  amount_base: number
+  fee_base: number
+  withdrawn_at: string
+}
+
 export type UserSettings = {
   home_currency: string
   default_bank_fee_pct: number
