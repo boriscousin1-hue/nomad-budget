@@ -11,20 +11,19 @@ Légende : ⬜ à faire · 🔨 en cours · ✅ fait
 ## Phase 1 — Enrichir le suivi financier
 *(prolonge le modèle de dépenses existant — valeur rapide, risque faible)*
 - ⬜ **Revenus** — entrées d'argent (pour nomades qui bossent) → solde net. Table `incomes` ou champ `kind` sur expenses.
-- ⬜ **Cash vs carte** — champ `payment_method` (`card` | `cash` | `transfer`) sur chaque dépense + filtre.
-- ⬜ **Frais de retrait DAB** — saisie rapide « retrait » : montant + frais, alimente le portefeuille cash.
-- ⬜ **Convertisseur rapide** — widget « X THB = ? EUR » sans créer de dépense (réutilise /api/rates).
-- ⬜ **Portefeuille multi-devises** — solde de cash restant par devise (retraits − dépenses cash).
-- ⬜ **Dépenses récurrentes** — table `recurring_expenses` (loyer, coworking, eSIM…) générées auto chaque période.
-- ⬜ **Burn rate & projection** — dépense moyenne/jour + « ton budget tient jusqu'au … ».
+- ✅ **Cash vs carte** — champ `payment_method` (`card` | `cash` | `transfer`) sur chaque dépense.
+- ✅ **Frais de retrait DAB** — saisie « retrait » : montant + frais, alimente le portefeuille cash.
+- ✅ **Convertisseur rapide** — widget « X THB = ? EUR » sans créer de dépense.
+- ✅ **Portefeuille multi-devises** — solde de cash restant par devise (retraits − dépenses cash).
+- ✅ **Dépenses récurrentes** — table `recurring_expenses`, génération auto (backfill + anti-doublon).
+- ✅ **Burn rate & projection** — dépense moyenne/jour + « budget épuisé le … ».
 
-## Phase 2 — Structure « voyage » (itinéraire & logistique)
-*(donne une colonne vertébrale au voyage)*
-- ⬜ **Étapes / pays** — table `trip_legs` (pays, ville, date arrivée/départ) + timeline + carte du parcours.
-- ⬜ **Budget par étape/pays** — budget et total dépensé par étape, en plus du global.
-- ⬜ **Compteur jours par pays** — suivi durée (Schengen 90 j, visas, résidence fiscale) + alerte avant dépassement.
-- ⬜ **Réservations** — table `bookings` (vol/hôtel/train : n° confirmation, date, PDF) + compte à rebours prochain départ.
-- ⬜ **Fuseaux horaires** — heure locale de l'étape en cours.
+## Phase 2 — Structure « voyage » (itinéraire & logistique) ✅ (hors fuseaux)
+- ✅ **Étapes / pays** — table `trip_legs` + timeline.
+- ✅ **Budget par étape/pays** — dépenses de la période (dérivées des dates) vs budget d'étape.
+- ✅ **Compteur jours par pays** — cumul + alerte visa (approche/dépassement).
+- ✅ **Réservations** — table `bookings` + prochaine à venir (compte à rebours).
+- ⬜ **Fuseaux horaires** — heure locale de l'étape en cours. *(reporté, valeur faible)*
 
 ## Phase 3 — Documents & sécurité
 - ⬜ **Coffre à documents** — passeport, visa, assurance, permis (Supabase Storage, fichiers chiffrés/privés).
@@ -36,12 +35,12 @@ Légende : ⬜ à faire · 🔨 en cours · ✅ fait
 - ⬜ **Météo** de l'étape en cours (API météo gratuite).
 - ⬜ **Comparateur de cartes** (Wise / Revolut / N26) — meilleur taux du jour (+ affiliation possible).
 
-## Phase 5 — Bilans & stats
-- ⬜ **Bilan de fin de voyage** — total, par pays, par catégorie, jour le plus cher, frais cachés cumulés — partageable (lien public read-only).
-- ⬜ **Stats avancées** — moyenne/jour, poste le plus cher, comparaison entre voyages.
+## Phase 5 — Bilans & stats ✅
+- ✅ **Bilan de fin de voyage** — total, par pays/catégorie, jour le plus cher, frais cachés — **partageable** (lien public read-only `/share/<token>`).
+- ✅ **Stats avancées** — moyenne/jour, poste le plus cher. *(comparaison entre voyages : à venir)*
 
 ## Phase 6 — Confort produit
-- ⬜ **PWA installable** — icône sur l'écran d'accueil, plein écran (manifest + service worker). *Rapide, gros effet.*
+- 🔨 **PWA installable** — icône sur l'écran d'accueil, plein écran (manifest + icônes). *Rapide, gros effet.*
 - ⬜ **Mode hors-ligne** — saisir une dépense sans réseau, file d'attente locale (IndexedDB), synchro au retour du wifi. *Le plus complexe — phase dédiée.*
 - ⬜ **Notifications** — dépassement de budget, visa qui expire, relance.
 - ⬜ **Import CSV bancaire** — récupérer les dépenses depuis un relevé.
