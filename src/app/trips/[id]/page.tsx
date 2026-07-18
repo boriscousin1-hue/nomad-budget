@@ -26,6 +26,7 @@ import SpendingChart from '@/components/SpendingChart'
 import AnimatedNumber from '@/components/AnimatedNumber'
 import BurnRate from '@/components/BurnRate'
 import QuickConverter from '@/components/QuickConverter'
+import CardComparator from '@/components/CardComparator'
 
 const PAYMENT_ICON: Record<string, string> = Object.fromEntries(PAYMENT_METHODS.map((m) => [m.value, m.icon]))
 
@@ -420,6 +421,9 @@ export default function TripDetailPage() {
           </motion.div>
           <motion.div variants={fadeUp}>
             <QuickConverter rates={rates} baseCurrency={trip.base_currency} />
+          </motion.div>
+          <motion.div variants={fadeUp}>
+            <CardComparator rates={rates} baseCurrency={trip.base_currency} defaultCurrency={defaultCurrency} />
           </motion.div>
         </motion.div>
 
