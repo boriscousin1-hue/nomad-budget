@@ -27,6 +27,7 @@ import AnimatedNumber from '@/components/AnimatedNumber'
 import BurnRate from '@/components/BurnRate'
 import QuickConverter from '@/components/QuickConverter'
 import CardComparator from '@/components/CardComparator'
+import CurrentWeather from '@/components/CurrentWeather'
 
 const PAYMENT_ICON: Record<string, string> = Object.fromEntries(PAYMENT_METHODS.map((m) => [m.value, m.icon]))
 
@@ -279,6 +280,11 @@ export default function TripDetailPage() {
 
   const summary = buildSummary(trip, expenses, incomes, withdrawals, categories, legs)
 
+  // Lieu de l'étape en cours (date du jour dans la plage) → météo.
+  const todayStr = new Date().toISOString().slice(0, 10)
+  const currentLeg = legs.find((l) => l.start_date <= todayStr && (l.end_date || '9999-12-31') >= todayStr)
+  const currentPlace = currentLeg ? (currentLeg.city || currentLeg.country) : ''
+
   const categoryBreakdown = categories
     .map((cat) => ({
       ...cat,
@@ -465,6 +471,8 @@ export default function TripDetailPage() {
             </AnimatePresence>
           </div>
         )}
+
+        {currentPlace && <CurrentWeather place={currentPlace} />}
 
         <ItineraryManager
           tripId={trip.id}
