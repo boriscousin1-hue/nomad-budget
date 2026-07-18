@@ -30,8 +30,8 @@ Légende : ⬜ à faire · 🔨 en cours · ✅ fait
 - ⬜ **Alertes d'expiration** — passeport / visa / assurance qui arrivent à échéance.
 - ⬜ **Fiche urgence par pays** — ambassade, n° à bloquer en cas de perte de carte, contacts.
 
-## Phase 4 — Vie de nomade
-- 🔨 **Infos par pays** — prises électriques, tension, eau du robinet, pourboires, couverture data, numéros d'urgence.
+## Phase 4 — Vie de nomade ✅
+- ✅ **Infos par pays** — prises électriques, tension, eau du robinet, pourboires, couverture data, numéros d'urgence (~39 pays, lookup accents+alias).
 - ✅ **Météo** de l'étape en cours (open-meteo, gratuit sans clé).
 - ✅ **Comparateur de cartes** (Wise / Revolut / N26 / banque) — coût réel estimé par carte.
 
