@@ -59,6 +59,28 @@ export type Withdrawal = {
   withdrawn_at: string
 }
 
+export type DocumentKind = 'passport' | 'visa' | 'insurance' | 'id' | 'ticket' | 'other'
+
+export const DOCUMENT_KINDS: { value: DocumentKind; label: string; icon: string }[] = [
+  { value: 'passport', label: 'Passeport', icon: '🛂' },
+  { value: 'visa', label: 'Visa', icon: '📄' },
+  { value: 'insurance', label: 'Assurance', icon: '🏥' },
+  { value: 'id', label: 'Pièce d’identité', icon: '🪪' },
+  { value: 'ticket', label: 'Billet', icon: '🎫' },
+  { value: 'other', label: 'Autre', icon: '📎' },
+]
+
+export type TravelDocument = {
+  id: string
+  label: string
+  kind: DocumentKind
+  expiry_date: string | null
+  file_path: string | null
+  file_name: string | null
+  note: string | null
+  created_at: string
+}
+
 export type BookingKind = 'flight' | 'hotel' | 'train' | 'bus' | 'car' | 'other'
 
 export const BOOKING_KINDS: { value: BookingKind; label: string; icon: string }[] = [

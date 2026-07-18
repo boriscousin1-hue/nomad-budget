@@ -11,7 +11,7 @@ import { downloadCsv } from '@/lib/csv'
 import { dueRecurring } from '@/lib/recurring'
 import { buildSummary } from '@/lib/summary'
 import { fadeUp, stagger, easeApple } from '@/lib/motion'
-import { PAYMENT_METHODS, type Trip, type Category, type Expense, type Income, type Withdrawal, type Recurring, type Leg, type Booking } from '@/lib/types'
+import { PAYMENT_METHODS, type Trip, type Category, type Expense, type Income, type Withdrawal, type Recurring, type Leg, type Booking, type TravelDocument } from '@/lib/types'
 import ExpenseForm from '@/components/ExpenseForm'
 import IncomeForm from '@/components/IncomeForm'
 import WithdrawalForm from '@/components/WithdrawalForm'
@@ -19,6 +19,7 @@ import CategoryManager from '@/components/CategoryManager'
 import RecurringManager from '@/components/RecurringManager'
 import ItineraryManager from '@/components/ItineraryManager'
 import BookingManager from '@/components/BookingManager'
+import DocumentManager from '@/components/DocumentManager'
 import TripSummaryView from '@/components/TripSummary'
 import Button from '@/components/Button'
 import SpendingChart from '@/components/SpendingChart'
@@ -56,6 +57,7 @@ export default function TripDetailPage() {
 
   const [legs, setLegs] = useState<Leg[]>([])
   const [bookings, setBookings] = useState<Booking[]>([])
+  const [documents, setDocuments] = useState<TravelDocument[]>([])
   const [showSummary, setShowSummary] = useState(false)
   const [shareMsg, setShareMsg] = useState<string | null>(null)
 
@@ -104,6 +106,9 @@ export default function TripDetailPage() {
       .then(({ data }) => setLegs((data as Leg[]) || []))
     supabase.from('bookings').select('*').eq('trip_id', trip.id).order('start_date')
       .then(({ data }) => setBookings((data as Booking[]) || []))
+    // Documents = niveau utilisateur (coffre visible depuis n'importe quel voyage)
+    supabase.from('documents').select('*').eq('user_id', user.id).order('created_at', { ascending: false })
+      .then(({ data }) => setDocuments((data as TravelDocument[]) || []))
     supabase.from('user_settings').select('default_bank_fee_pct').eq('user_id', user.id).maybeSingle()
       .then(({ data }) => setDefaultBankFeePct(String(data?.default_bank_fee_pct ?? 0)))
     loadRates(trip.base_currency)
@@ -476,6 +481,13 @@ export default function TripDetailPage() {
           onCreated={(b) => setBookings((prev) => [...prev, b])}
           onUpdated={(b) => setBookings((prev) => prev.map((x) => (x.id === b.id ? b : x)))}
           onDeleted={(bid) => setBookings((prev) => prev.filter((b) => b.id !== bid))}
+        />
+
+        <DocumentManager
+          userId={user.id}
+          documents={documents}
+          onCreated={(d) => setDocuments((prev) => [d, ...prev])}
+          onDeleted={(d) => setDocuments((prev) => prev.filter((x) => x.id !== d.id))}
         />
 
         <CategoryManager
