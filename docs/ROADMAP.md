@@ -31,9 +31,9 @@ Légende : ⬜ à faire · 🔨 en cours · ✅ fait
 - ⬜ **Fiche urgence par pays** — ambassade, n° à bloquer en cas de perte de carte, contacts.
 
 ## Phase 4 — Vie de nomade
-- ⬜ **Infos par pays** — eSIM/data, spots coworking/wifi, prises électriques, pourboires d'usage.
-- ⬜ **Météo** de l'étape en cours (API météo gratuite).
-- ⬜ **Comparateur de cartes** (Wise / Revolut / N26) — meilleur taux du jour (+ affiliation possible).
+- 🔨 **Infos par pays** — prises électriques, tension, eau du robinet, pourboires, couverture data, numéros d'urgence.
+- ✅ **Météo** de l'étape en cours (open-meteo, gratuit sans clé).
+- ✅ **Comparateur de cartes** (Wise / Revolut / N26 / banque) — coût réel estimé par carte.
 
 ## Phase 5 — Bilans & stats ✅
 - ✅ **Bilan de fin de voyage** — total, par pays/catégorie, jour le plus cher, frais cachés — **partageable** (lien public read-only `/share/<token>`).

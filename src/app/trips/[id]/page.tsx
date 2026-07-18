@@ -28,6 +28,7 @@ import BurnRate from '@/components/BurnRate'
 import QuickConverter from '@/components/QuickConverter'
 import CardComparator from '@/components/CardComparator'
 import CurrentWeather from '@/components/CurrentWeather'
+import CountryInfo from '@/components/CountryInfo'
 
 const PAYMENT_ICON: Record<string, string> = Object.fromEntries(PAYMENT_METHODS.map((m) => [m.value, m.icon]))
 
@@ -473,6 +474,7 @@ export default function TripDetailPage() {
         )}
 
         {currentPlace && <CurrentWeather place={currentPlace} />}
+        {currentLeg?.country && <CountryInfo country={currentLeg.country} />}
 
         <ItineraryManager
           tripId={trip.id}
