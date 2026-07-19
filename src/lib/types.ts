@@ -36,6 +36,7 @@ export type Expense = {
   payment_method: PaymentMethod
   note: string | null
   spent_at: string
+  pending?: boolean // client-only : saisie hors-ligne en attente de synchronisation
 }
 
 export type Income = {

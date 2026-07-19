@@ -11,6 +11,8 @@ import { downloadCsv } from '@/lib/csv'
 import { dueRecurring } from '@/lib/recurring'
 import { buildSummary } from '@/lib/summary'
 import { fadeUp, stagger, easeApple } from '@/lib/motion'
+import { useOnline } from '@/lib/useOnline'
+import { saveSnapshot, loadSnapshot, getQueueForTrip, dequeue } from '@/lib/offlineDb'
 import { PAYMENT_METHODS, type Trip, type Category, type Expense, type Income, type Withdrawal, type Recurring, type Leg, type Booking, type TravelDocument } from '@/lib/types'
 import ExpenseForm from '@/components/ExpenseForm'
 import IncomeForm from '@/components/IncomeForm'
@@ -38,6 +40,10 @@ export default function TripDetailPage() {
   const { user, loading: userLoading } = useUser()
   const [trip, setTrip] = useState<Trip | null | undefined>(undefined) // undefined = chargement, null = introuvable
   const [deleting, setDeleting] = useState(false)
+  const online = useOnline()
+  const [fromCache, setFromCache] = useState(false) // données servies depuis l'instantané hors-ligne
+  const [pendingCount, setPendingCount] = useState(0) // saisies hors-ligne en attente de synchro
+  const flushRef = useRef(false) // garde : une seule synchro à la fois
 
   const [categories, setCategories] = useState<Category[]>([])
   const [loadingCategories, setLoadingCategories] = useState(true)
@@ -73,16 +79,46 @@ export default function TripDetailPage() {
   const [filterFrom, setFilterFrom] = useState('')
   const [filterTo, setFilterTo] = useState('')
 
-  // Charge le voyage
+  // Réhydrate toute la page depuis un instantané hors-ligne (aucun réseau requis).
+  const hydrateFromSnapshot = (d: Record<string, unknown>) => {
+    setFromCache(true)
+    setTrip((d.trip as Trip) ?? null)
+    setCategories((d.categories as Category[]) || [])
+    setExpenses((d.expenses as Expense[]) || [])
+    setIncomes((d.incomes as Income[]) || [])
+    setWithdrawals((d.withdrawals as Withdrawal[]) || [])
+    setRecurrings((d.recurrings as Recurring[]) || [])
+    setLegs((d.legs as Leg[]) || [])
+    setBookings((d.bookings as Booking[]) || [])
+    setDocuments((d.documents as TravelDocument[]) || [])
+    setRates((d.rates as RatesResponse) ?? null)
+    setDefaultCurrency((d.defaultCurrency as string) || '')
+    setDefaultBankFeePct((d.defaultBankFeePct as string) ?? '')
+    setLoadingCategories(false)
+    setLoadingExpenses(false)
+    setRecurringLoaded(true)
+  }
+
+  // Charge le voyage — si pas de réseau, repli sur l'instantané hors-ligne.
   useEffect(() => {
     if (!user) return
-    supabase.from('trips').select('*').eq('id', id).maybeSingle()
-      .then(({ data }) => setTrip((data as Trip) || null))
+    let cancelled = false
+    ;(async () => {
+      const { data } = await supabase.from('trips').select('*').eq('id', id).maybeSingle()
+      if (cancelled) return
+      if (data) { setTrip(data as Trip); return }
+      // Pas de données (hors-ligne ou introuvable) : tente l'instantané local.
+      const snap = await loadSnapshot(id)
+      if (cancelled) return
+      if (snap) hydrateFromSnapshot(snap.data)
+      else setTrip(null)
+    })()
+    return () => { cancelled = true }
   }, [user, id])
 
-  // Charge catégories + dépenses + taux + réglages une fois le voyage connu
+  // Charge catégories + dépenses + taux + réglages une fois le voyage connu (en ligne uniquement)
   useEffect(() => {
-    if (!trip || !user) return
+    if (!trip || !user || fromCache) return
     supabase.from('categories').select('*').eq('trip_id', trip.id).order('created_at')
       .then(({ data }) => {
         setCategories((data as Category[]) || [])
@@ -115,7 +151,7 @@ export default function TripDetailPage() {
     supabase.from('user_settings').select('default_bank_fee_pct').eq('user_id', user.id).maybeSingle()
       .then(({ data }) => setDefaultBankFeePct(String(data?.default_bank_fee_pct ?? 0)))
     loadRates(trip.base_currency)
-  }, [trip, user])
+  }, [trip, user, fromCache])
 
   const loadRates = async (base: string) => {
     setRatesError(null)
@@ -127,9 +163,9 @@ export default function TripDetailPage() {
     }
   }
 
-  // Génération automatique des dépenses récurrentes dues (une fois par chargement).
+  // Génération automatique des dépenses récurrentes dues (une fois par chargement, en ligne).
   useEffect(() => {
-    if (genRef.current || !trip || !user || !rates || !recurringLoaded) return
+    if (genRef.current || !trip || !user || !rates || !recurringLoaded || fromCache) return
     genRef.current = true
     const { toInsert, updates } = dueRecurring(recurrings, rates, trip.id, user.id)
     if (toInsert.length === 0) return
@@ -148,6 +184,63 @@ export default function TripDetailPage() {
     })()
   }, [trip, user, rates, recurringLoaded, recurrings])
 
+  // Sauvegarde un instantané complet du voyage pour la consultation hors-ligne,
+  // à chaque évolution des données chargées en ligne (jamais quand on lit déjà le cache).
+  useEffect(() => {
+    if (fromCache || !trip || !user || loadingExpenses) return
+    saveSnapshot(trip.id, {
+      trip, categories, expenses, incomes, withdrawals, recurrings, legs, bookings, documents,
+      rates, defaultCurrency, defaultBankFeePct,
+    })
+  }, [fromCache, trip, user, loadingExpenses, categories, expenses, incomes, withdrawals, recurrings, legs, bookings, documents, rates, defaultCurrency, defaultBankFeePct])
+
+  // Compte les saisies hors-ligne en attente pour ce voyage.
+  const refreshPending = async (tripId: string) => {
+    const q = await getQueueForTrip(tripId)
+    setPendingCount(q.length)
+  }
+
+  // Rejoue la file d'attente hors-ligne dès qu'on a du réseau : insère chaque dépense
+  // en attente, remplace la ligne locale par la ligne serveur, vide la file.
+  const flushQueue = async (t: Trip) => {
+    if (flushRef.current || typeof navigator === 'undefined' || !navigator.onLine) return
+    flushRef.current = true
+    try {
+      const q = await getQueueForTrip(t.id)
+      let synced = 0
+      for (const m of q) {
+        if (m.kind !== 'expense.insert') continue
+        let res
+        try {
+          res = await supabase.from('expenses').insert(m.payload).select().single()
+        } catch {
+          break // toujours hors-ligne : on réessaiera au prochain retour réseau
+        }
+        if (res.error) {
+          if (!(res.error as { code?: string }).code) break // panne réseau → on garde en file
+          await dequeue(m.localId) // erreur métier (donnée invalide) : on retire pour ne pas bloquer
+          setExpenses((prev) => prev.filter((e) => e.id !== m.localId))
+          continue
+        }
+        await dequeue(m.localId)
+        synced++
+        setExpenses((prev) => prev.map((e) => (e.id === m.localId ? (res.data as Expense) : e)))
+      }
+      await refreshPending(t.id)
+      if (synced > 0 && fromCache) setFromCache(false) // recharge des données fraîches du serveur
+    } finally {
+      flushRef.current = false
+    }
+  }
+
+  // Au chargement et à chaque retour de réseau : synchronise la file d'attente.
+  useEffect(() => {
+    if (!trip || !user) return
+    refreshPending(trip.id)
+    if (online) flushQueue(trip)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trip, user, online])
+
   const deleteTrip = async () => {
     if (!confirm('Supprimer ce voyage et toutes ses dépenses ? Action irréversible.')) return
     setDeleting(true)
@@ -158,6 +251,15 @@ export default function TripDetailPage() {
 
   const deleteExpense = async (expenseId: string) => {
     if (!confirm('Supprimer cette dépense ?')) return
+    // Dépense encore en file d'attente hors-ligne : on la retire de la file, pas du serveur.
+    const target = expenses.find((e) => e.id === expenseId)
+    if (target?.pending) {
+      await dequeue(expenseId)
+      setExpenses((prev) => prev.filter((e) => e.id !== expenseId))
+      if (editingExpense?.id === expenseId) setEditingExpense(null)
+      if (trip) refreshPending(trip.id)
+      return
+    }
     const { error } = await supabase.from('expenses').delete().eq('id', expenseId)
     if (error) { alert(error.message); return }
     setExpenses((prev) => prev.filter((e) => e.id !== expenseId))
@@ -166,6 +268,7 @@ export default function TripDetailPage() {
 
   const handleExpenseSaved = (expense: Expense, isNew: boolean) => {
     setExpenses((prev) => (isNew ? [expense, ...prev] : prev.map((e) => (e.id === expense.id ? expense : e))))
+    if (trip) refreshPending(trip.id)
   }
 
   const startEditExpense = (exp: Expense) => {
@@ -535,7 +638,14 @@ export default function TripDetailPage() {
 
         {/* Filtre de dates + export CSV */}
         <div className="flex items-center gap-2 mb-3 flex-wrap">
-          <h2 className="text-[13px] font-medium text-muted uppercase tracking-wide flex-1">Dépenses</h2>
+          <h2 className="text-[13px] font-medium text-muted uppercase tracking-wide flex items-center gap-2 flex-1">
+            Dépenses
+            {pendingCount > 0 && (
+              <span className="normal-case tracking-normal rounded-full bg-[#ff9f0a]/15 text-[#b26a00] text-[11px] font-medium px-2 py-0.5">
+                {pendingCount} en attente de synchro
+              </span>
+            )}
+          </h2>
           <input
             type="date" value={filterFrom} onChange={(e) => setFilterFrom(e.target.value)}
             className="text-[13px] rounded-lg border border-[var(--color-line)] bg-surface px-2.5 py-1.5 outline-none focus:border-accent"
@@ -585,10 +695,15 @@ export default function TripDetailPage() {
                     className={`group rounded-2xl bg-surface border px-4 py-3.5 flex items-center justify-between shadow-[var(--shadow-card)] transition-colors ${editingExpense?.id === exp.id ? 'border-accent' : 'border-[var(--color-line)]'}`}
                   >
                     <div className="min-w-0">
-                      <div className="text-[15px] font-medium tnum">
-                        <span className="mr-1" title={exp.payment_method}>{PAYMENT_ICON[exp.payment_method] || '💳'}</span>
-                        {exp.amount_local} {exp.currency_local}
-                        <span className="text-faint font-normal"> → {exp.amount_base_with_fee.toFixed(2)} {trip.base_currency}</span>
+                      <div className="text-[15px] font-medium tnum flex items-center gap-1.5">
+                        <span title={exp.payment_method}>{PAYMENT_ICON[exp.payment_method] || '💳'}</span>
+                        <span>
+                          {exp.amount_local} {exp.currency_local}
+                          <span className="text-faint font-normal"> → {exp.amount_base_with_fee.toFixed(2)} {trip.base_currency}</span>
+                        </span>
+                        {exp.pending && (
+                          <span className="shrink-0 rounded-full bg-[#ff9f0a]/15 text-[#b26a00] text-[11px] font-medium px-2 py-0.5">⏳ en attente</span>
+                        )}
                       </div>
                       <div className="text-[13px] text-faint truncate">
                         {new Date(exp.spent_at).toLocaleDateString('fr-FR')}
@@ -598,7 +713,9 @@ export default function TripDetailPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-1 shrink-0 ml-2">
-                      <button onClick={() => startEditExpense(exp)} className="text-faint hover:text-ink transition-colors h-8 w-8 rounded-full hover:bg-black/[0.05] flex items-center justify-center text-sm">✏️</button>
+                      {!exp.pending && (
+                        <button onClick={() => startEditExpense(exp)} className="text-faint hover:text-ink transition-colors h-8 w-8 rounded-full hover:bg-black/[0.05] flex items-center justify-center text-sm">✏️</button>
+                      )}
                       <button onClick={() => deleteExpense(exp.id)} className="text-faint hover:text-[var(--color-danger)] transition-colors h-8 w-8 rounded-full hover:bg-black/[0.05] flex items-center justify-center">✕</button>
                     </div>
                   </motion.li>

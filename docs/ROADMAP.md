@@ -40,8 +40,8 @@ Légende : ⬜ à faire · 🔨 en cours · ✅ fait
 - ✅ **Stats avancées** — moyenne/jour, poste le plus cher. *(comparaison entre voyages : à venir)*
 
 ## Phase 6 — Confort produit
-- 🔨 **PWA installable** — icône sur l'écran d'accueil, plein écran (manifest + icônes). *Rapide, gros effet.*
-- ⬜ **Mode hors-ligne** — saisir une dépense sans réseau, file d'attente locale (IndexedDB), synchro au retour du wifi. *Le plus complexe — phase dédiée.*
+- ✅ **PWA installable** — icône sur l'écran d'accueil, plein écran (manifest + icônes).
+- ✅ **Mode hors-ligne** — service worker (ouverture sans réseau), instantané IndexedDB (consultation), saisie de dépense en file d'attente locale + synchro auto à la reconnexion (badge « en attente »). *Logique vérifiée (IndexedDB 7/7, SW servi+valide) ; test terrain final sur téléphone en mode avion.*
 - ⬜ **Notifications** — dépassement de budget, visa qui expire, relance.
 - ⬜ **Import CSV bancaire** — récupérer les dépenses depuis un relevé.
 - ⬜ **Multi-langue** — EN d'abord (audience nomade internationale).

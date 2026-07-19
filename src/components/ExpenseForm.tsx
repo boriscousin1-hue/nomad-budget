@@ -6,7 +6,11 @@ import { supabase } from '@/lib/supabase'
 import { CURRENCIES } from '@/lib/currencies'
 import { localToBaseRate, withBankFee, type RatesResponse } from '@/lib/exchangeRates'
 import { PAYMENT_METHODS, type Category, type Expense, type PaymentMethod } from '@/lib/types'
+import { enqueue } from '@/lib/offlineDb'
 import Button from '@/components/Button'
+
+const newLocalId = () =>
+  typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `local-${Date.now()}-${Math.random().toString(36).slice(2)}`
 
 type Props = {
   tripId: string
@@ -120,9 +124,32 @@ export default function ExpenseForm({
       onSaved(data as Expense, false)
       onCancelEdit()
     } else {
-      const { data, error } = await supabase.from('expenses').insert({ trip_id: tripId, user_id: userId, ...payload }).select().single()
+      const row = { trip_id: tripId, user_id: userId, ...payload }
+      // Enregistre hors-ligne : file d'attente locale + affichage optimiste immédiat.
+      const queueLocally = async () => {
+        const localId = newLocalId()
+        await enqueue({ localId, kind: 'expense.insert', tripId, payload: row, createdAt: Date.now() })
+        setSaving(false)
+        onSaved({ id: localId, ...payload, pending: true } as Expense, true)
+        setAmountLocal('')
+        setNote('')
+      }
+      if (typeof navigator !== 'undefined' && !navigator.onLine) { await queueLocally(); return }
+      let res
+      try {
+        res = await supabase.from('expenses').insert(row).select().single()
+      } catch {
+        await queueLocally() // perte réseau pendant la requête
+        return
+      }
+      const { data, error } = res
+      if (error) {
+        // Erreur sans code PostgREST = panne réseau probable → file d'attente ; sinon vraie erreur.
+        const code = (error as { code?: string }).code
+        if (!code) { await queueLocally(); return }
+        setSaving(false); setError(error.message); return
+      }
       setSaving(false)
-      if (error) { setError(error.message); return }
       onSaved(data as Expense, true)
       setAmountLocal('')
       setNote('')
